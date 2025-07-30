@@ -15,11 +15,15 @@
     <div id="buttonContainer">
         <button id="exploreButton" class="neon-button">Click to Explore</button>
     </div>
-    <div id="infocardOverlay" class="infocard-overlay">
-        <div id="infocard" class="infocard">
-            <button id="closeCard" class="close-button">&times;</button>
-            <div id="cardContent" class="card-content"></div>
-        </div>
+    <!-- Left Data Card -->
+    <div id="dataCard" class="data-card">
+        <div id="dataCardContent" class="data-card-content"></div>
+    </div>
+    
+    <!-- Right Visualization Area -->
+    <div id="vizArea" class="viz-area">
+        <canvas id="nodeVizCanvas"></canvas>
+        <button id="backButton" class="back-button">← Back to Overview</button>
     </div>
     <script src="script.js"></script>
 </body>

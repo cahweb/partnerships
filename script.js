@@ -2,6 +2,8 @@ class TronCircuitboard {
     constructor() {
         this.canvas = document.getElementById('circuitCanvas');
         this.ctx = this.canvas.getContext('2d');
+        this.vizCanvas = document.getElementById('nodeVizCanvas');
+        this.vizCtx = this.vizCanvas.getContext('2d');
         this.lines = [];
         this.intersections = [];
         this.pulses = [];
@@ -14,6 +16,11 @@ class TronCircuitboard {
         this.nodesGenerated = false;
         this.nodes = [];
         this.departmentData = null;
+        this.isDetailView = false;
+        this.currentNode = null;
+        this.vizNodes = [];
+        this.vizLinks = [];
+        this.animationTime = 0; // For time-based animations
         
         this.departmentNames = [
             'School of Performing Arts',
@@ -40,8 +47,8 @@ class TronCircuitboard {
             this.generateLines();
         }, 500);
         
-        // Setup infocard functionality
-        this.setupInfocard();
+        // Setup new UI functionality
+        this.setupNewUI();
     }
     
     async loadDepartmentData() {
@@ -54,7 +61,7 @@ class TronCircuitboard {
         }
     }
     
-    setupInfocard() {
+    setupNewUI() {
         // Wait for DOM to be ready
         setTimeout(() => {
             // Setup main title click
@@ -65,31 +72,23 @@ class TronCircuitboard {
                     console.log('College text clicked!');
                     e.preventDefault();
                     e.stopPropagation();
-                    this.showInfocard('college-of-arts-and-humanities');
+                    this.showDataCard('college-of-arts-and-humanities');
                 });
             } else {
                 console.error('College text element not found');
             }
         }, 100);
         
-        // Setup close button
-        const closeButton = document.getElementById('closeCard');
-        const overlay = document.getElementById('infocardOverlay');
-        
-        closeButton.addEventListener('click', () => {
-            this.hideInfocard();
+        // Setup back button
+        const backButton = document.getElementById('backButton');
+        backButton.addEventListener('click', () => {
+            this.exitDetailView();
         });
         
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                this.hideInfocard();
-            }
-        });
-        
-        // ESC key to close
+        // ESC key to exit detail view
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.hideInfocard();
+            if (e.key === 'Escape' && this.isDetailView) {
+                this.exitDetailView();
             }
         });
     }
@@ -102,6 +101,12 @@ class TronCircuitboard {
     resizeCanvas() {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
+        
+        // Setup viz canvas
+        if (this.vizCanvas) {
+            this.vizCanvas.width = this.vizCanvas.offsetWidth;
+            this.vizCanvas.height = this.vizCanvas.offsetHeight;
+        }
     }
     
     generateGrid() {
@@ -456,15 +461,9 @@ class TronCircuitboard {
     
     addNodeInteractions(node) {
         node.addEventListener('click', () => {
-            // Simple click effect
-            node.style.transform = 'scale(1.05)';
-            setTimeout(() => {
-                node.style.transform = 'scale(1)';
-            }, 200);
-            
-            // Show infocard
+            // Move node to center and enter detail view
             const departmentId = this.getDepartmentId(node.textContent);
-            this.showInfocard(departmentId);
+            this.enterDetailView(node, departmentId);
         });
     }
     
@@ -476,7 +475,76 @@ class TronCircuitboard {
             .replace(/&/g, 'and');
     }
     
-    showInfocard(departmentId) {
+    enterDetailView(clickedNode, departmentId) {
+        if (this.isDetailView) return;
+        this.isDetailView = true;
+        this.currentNode = clickedNode;
+        
+        // Fade out other elements
+        this.canvas.classList.add('fade-out');
+        document.getElementById('textContainer').classList.add('fade-out');
+        
+        // Fade out other nodes
+        this.nodes.forEach(nodeData => {
+            if (nodeData.element !== clickedNode) {
+                nodeData.element.classList.add('fade-out');
+            }
+        });
+        
+        // Move clicked node to center
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        const nodeRect = clickedNode.getBoundingClientRect();
+        
+        clickedNode.style.transition = 'all 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+        clickedNode.style.left = (centerX - nodeRect.width / 2) + 'px';
+        clickedNode.style.top = (centerY - nodeRect.height / 2) + 'px';
+        clickedNode.style.transform = 'scale(1.2)';
+        clickedNode.style.zIndex = '1000';
+        
+        // Show data card and viz area
+        setTimeout(() => {
+            this.showDataCard(departmentId);
+            this.showVizArea();
+            this.createPartnershipVisualization(departmentId);
+        }, 400);
+    }
+    
+    exitDetailView() {
+        if (!this.isDetailView) return;
+        this.isDetailView = false;
+        
+        // Hide data card and viz area
+        this.hideDataCard();
+        this.hideVizArea();
+        
+        // Restore clicked node position
+        if (this.currentNode) {
+            const nodeData = this.nodes.find(n => n.element === this.currentNode);
+            if (nodeData) {
+                this.currentNode.style.transition = 'all 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+                this.currentNode.style.left = nodeData.x + 'px';
+                this.currentNode.style.top = nodeData.y + 'px';
+                this.currentNode.style.transform = 'scale(1)';
+                this.currentNode.style.zIndex = '10';
+            }
+        }
+        
+        // Fade in other elements
+        setTimeout(() => {
+            this.canvas.classList.remove('fade-out');
+            document.getElementById('textContainer').classList.remove('fade-out');
+            
+            // Fade in other nodes
+            this.nodes.forEach(nodeData => {
+                nodeData.element.classList.remove('fade-out');
+            });
+            
+            this.currentNode = null;
+        }, 300);
+    }
+    
+    showDataCard(departmentId) {
         if (!this.departmentData) {
             console.warn('Department data not loaded yet');
             return;
@@ -488,16 +556,111 @@ class TronCircuitboard {
             return;
         }
         
-        const cardContent = document.getElementById('cardContent');
+        const cardContent = document.getElementById('dataCardContent');
         cardContent.innerHTML = this.generateCardContent(department);
         
-        const overlay = document.getElementById('infocardOverlay');
-        overlay.classList.add('show');
+        const dataCard = document.getElementById('dataCard');
+        dataCard.classList.add('show');
     }
     
-    hideInfocard() {
-        const overlay = document.getElementById('infocardOverlay');
-        overlay.classList.remove('show');
+    hideDataCard() {
+        const dataCard = document.getElementById('dataCard');
+        dataCard.classList.remove('show');
+    }
+    
+    showVizArea() {
+        const vizArea = document.getElementById('vizArea');
+        vizArea.classList.add('show');
+        
+        // Resize viz canvas
+        setTimeout(() => {
+            this.vizCanvas.width = this.vizCanvas.offsetWidth;
+            this.vizCanvas.height = this.vizCanvas.offsetHeight;
+        }, 100);
+    }
+    
+    hideVizArea() {
+        const vizArea = document.getElementById('vizArea');
+        vizArea.classList.remove('show');
+    }
+    
+    createPartnershipVisualization(departmentId) {
+        if (!this.departmentData) return;
+        
+        const department = this.departmentData.departments.find(d => d.id === departmentId);
+        if (!department) return;
+        
+        // Clear previous visualization
+        this.vizNodes = [];
+        this.vizLinks = [];
+        
+        const canvasWidth = this.vizCanvas.width;
+        const canvasHeight = this.vizCanvas.height;
+        const centerX = canvasWidth / 2;
+        const centerY = canvasHeight / 2;
+        
+        // Create central node
+        this.vizNodes.push({
+            id: department.id,
+            name: department.name,
+            x: centerX,
+            y: centerY,
+            type: 'central',
+            radius: 20
+        });
+        
+        // Create partner nodes
+        const allPartners = [
+            ...department.internalPartners.map(p => ({ name: p, type: 'internal' })),
+            ...department.externalPartners.map(p => ({ name: p, type: 'external' }))
+        ];
+        
+        const angleStep = (Math.PI * 2) / allPartners.length;
+        const radius = Math.min(canvasWidth, canvasHeight) * 0.3;
+        
+        allPartners.forEach((partner, index) => {
+            const angle = index * angleStep;
+            const x = centerX + Math.cos(angle) * radius;
+            const y = centerY + Math.sin(angle) * radius;
+            
+            const partnerId = partner.name.toLowerCase().replace(/\s+/g, '-');
+            this.vizNodes.push({
+                id: partnerId,
+                name: partner.name,
+                x: x,
+                y: y,
+                type: partner.type,
+                radius: 12
+            });
+            
+            // Create link with type information
+            this.vizLinks.push({
+                source: department.id,
+                target: partnerId,
+                type: partner.type,
+                opacity: 0
+            });
+        });
+        
+        // Animate links
+        setTimeout(() => {
+            this.animateVizLinks();
+        }, 500);
+    }
+    
+    animateVizLinks() {
+        let progress = 0;
+        const animate = () => {
+            progress += 0.02;
+            this.vizLinks.forEach(link => {
+                link.opacity = Math.min(1, progress);
+            });
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+        animate();
     }
     
     generateCardContent(department) {
@@ -590,6 +753,9 @@ class TronCircuitboard {
     }
     
     animate() {
+        this.animationTime += 0.05; // Increment time for animations
+        
+        // Main canvas animation
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
@@ -625,7 +791,170 @@ class TronCircuitboard {
             return false;
         });
         
+        // Visualization canvas animation
+        if (this.isDetailView && this.vizNodes.length > 0) {
+            this.animateVisualization();
+        }
+        
         requestAnimationFrame(() => this.animate());
+    }
+    
+    animateVisualization() {
+        // Clear viz canvas with black background
+        this.vizCtx.fillStyle = 'rgba(0, 0, 0, 1)';
+        this.vizCtx.fillRect(0, 0, this.vizCanvas.width, this.vizCanvas.height);
+        
+        // Draw links
+        this.vizLinks.forEach(link => {
+            const sourceNode = this.vizNodes.find(n => n.id === link.source);
+            const targetNode = this.vizNodes.find(n => n.id === link.target);
+            
+            if (sourceNode && targetNode && link.opacity > 0) {
+                this.drawVizLink(sourceNode, targetNode, link.type, link.opacity);
+            }
+        });
+        
+        // Draw nodes
+        this.vizNodes.forEach(node => {
+            this.drawVizNode(node);
+        });
+        
+        // Draw labels
+        this.vizNodes.forEach(node => {
+            this.drawVizLabel(node);
+        });
+    }
+    
+    drawVizLink(source, target, linkType, opacity) {
+        this.vizCtx.save();
+        this.vizCtx.globalAlpha = opacity;
+        
+        // Add pulsing effect to line width and glow
+        const pulseWidth = 2 + Math.sin(this.animationTime * 3) * 0.5;
+        const pulseGlow = 10 + Math.sin(this.animationTime * 2) * 5;
+        
+        // Set color based on link type
+        if (linkType === 'internal') {
+            this.vizCtx.strokeStyle = '#ffff00'; // Yellow for internal
+            this.vizCtx.shadowColor = '#ffff00';
+        } else if (linkType === 'external') {
+            this.vizCtx.strokeStyle = '#ff00ff'; // Pink/Magenta for external
+            this.vizCtx.shadowColor = '#ff00ff';
+        } else {
+            this.vizCtx.strokeStyle = '#00ffff'; // Default cyan
+            this.vizCtx.shadowColor = '#00ffff';
+        }
+        
+        this.vizCtx.lineWidth = pulseWidth;
+        this.vizCtx.shadowBlur = pulseGlow;
+        
+        this.vizCtx.beginPath();
+        this.vizCtx.moveTo(source.x, source.y);
+        this.vizCtx.lineTo(target.x, target.y);
+        this.vizCtx.stroke();
+        
+        this.vizCtx.restore();
+    }
+    
+    drawVizNode(node) {
+        this.vizCtx.save();
+        
+        // Add pulsing effect based on animation time
+        const pulseIntensity = 0.8 + 0.2 * Math.sin(this.animationTime * 2);
+        let shadowBlur = 10;
+        
+        if (node.type === 'central') {
+            this.vizCtx.fillStyle = '#ff6600';
+            this.vizCtx.shadowColor = '#ff6600';
+            shadowBlur = 20 + 10 * Math.sin(this.animationTime * 1.5);
+        } else if (node.type === 'internal') {
+            this.vizCtx.fillStyle = '#ffff00'; // Yellow for internal partners
+            this.vizCtx.shadowColor = '#ffff00';
+            shadowBlur = 10 + 5 * Math.sin(this.animationTime * 2);
+        } else if (node.type === 'external') {
+            this.vizCtx.fillStyle = '#ff00ff'; // Pink/Magenta for external partners
+            this.vizCtx.shadowColor = '#ff00ff';
+            shadowBlur = 10 + 5 * Math.sin(this.animationTime * 2);
+        } else {
+            this.vizCtx.fillStyle = '#00ffff';
+            this.vizCtx.shadowColor = '#00ffff';
+            shadowBlur = 10;
+        }
+        
+        this.vizCtx.shadowBlur = shadowBlur * pulseIntensity;
+        this.vizCtx.strokeStyle = '#ffffff';
+        this.vizCtx.lineWidth = node.type === 'central' ? 3 : 2;
+        
+        // Add slight size pulsing for central node
+        const radius = node.type === 'central' ? 
+            node.radius + 3 * Math.sin(this.animationTime) : 
+            node.radius;
+        
+        this.vizCtx.beginPath();
+        this.vizCtx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        this.vizCtx.fill();
+        this.vizCtx.stroke();
+        
+        this.vizCtx.restore();
+    }
+    
+    drawVizLabel(node) {
+        this.vizCtx.save();
+        
+        // Set label color based on node type
+        if (node.type === 'central') {
+            this.vizCtx.fillStyle = '#ff6600';
+            this.vizCtx.font = 'bold 16px Orbitron';
+            this.vizCtx.shadowColor = '#ff6600';
+            this.vizCtx.shadowBlur = 8;
+        } else if (node.type === 'internal') {
+            this.vizCtx.fillStyle = '#ffff00';
+            this.vizCtx.font = '12px Orbitron';
+            this.vizCtx.shadowColor = '#ffff00';
+            this.vizCtx.shadowBlur = 5;
+        } else if (node.type === 'external') {
+            this.vizCtx.fillStyle = '#ff00ff';
+            this.vizCtx.font = '12px Orbitron';
+            this.vizCtx.shadowColor = '#ff00ff';
+            this.vizCtx.shadowBlur = 5;
+        } else {
+            this.vizCtx.fillStyle = '#ffffff';
+            this.vizCtx.font = '12px Orbitron';
+            this.vizCtx.shadowColor = '#000000';
+            this.vizCtx.shadowBlur = 3;
+        }
+        
+        this.vizCtx.textAlign = 'center';
+        this.vizCtx.textBaseline = 'middle';
+        
+        // Wrap long text
+        const maxWidth = 120;
+        const words = node.name.split(' ');
+        let line = '';
+        let lines = [];
+        
+        for (let i = 0; i < words.length; i++) {
+            const testLine = line + words[i] + ' ';
+            const metrics = this.vizCtx.measureText(testLine);
+            const testWidth = metrics.width;
+            
+            if (testWidth > maxWidth && i > 0) {
+                lines.push(line);
+                line = words[i] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line);
+        
+        const lineHeight = 16;
+        const startY = node.y + node.radius + 20 - (lines.length - 1) * lineHeight / 2;
+        
+        lines.forEach((line, index) => {
+            this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
+        });
+        
+        this.vizCtx.restore();
     }
     
     drawLine(line) {
