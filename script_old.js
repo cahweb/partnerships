@@ -23,14 +23,6 @@ class TronCircuitboard {
         this.animationTime = 0; // For time-based animations
         this.canSkipAnimation = true; // Allow skipping animation
         
-        // Hover state management
-        this.hoveredNode = null;
-        this.mouseX = 0;
-        this.mouseY = 0;
-        
-        // Filtering system
-        this.activeFilter = null; // 'central', 'degree', 'track', 'internal', 'external', or null for all
-        
         this.departmentNames = [
             'School of Performing Arts',
             'School of Visual Arts and Design',
@@ -49,14 +41,10 @@ class TronCircuitboard {
         
         this.setupCanvas();
         this.generateGrid();
-        this.setupLegendFilters(); // Add legend filtering
         this.animate();
         
         // Setup click-through functionality
         this.setupClickThrough();
-        
-        // Setup hover functionality for visualization
-        this.setupHoverHandling();
         
         // Start line generation after a short delay
         setTimeout(() => {
@@ -269,22 +257,6 @@ class TronCircuitboard {
     setupCanvas() {
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
-    }
-    
-    setupLegendFilters() {
-        // Add event listeners to legend items for filtering
-        const legendItems = document.querySelectorAll('.legend-item[data-filter]');
-        
-        legendItems.forEach(item => {
-            item.addEventListener('mouseenter', (e) => {
-                const filterType = e.currentTarget.getAttribute('data-filter');
-                this.setFilter(filterType);
-            });
-            
-            item.addEventListener('mouseleave', () => {
-                this.setFilter(null); // Clear filter on mouse leave
-            });
-        });
     }
     
     resizeCanvas() {
@@ -958,51 +930,6 @@ class TronCircuitboard {
         }, 100);
     }
     
-    setupHoverHandling() {
-        // Add mouse event listeners to visualization canvas
-        this.vizCanvas.addEventListener('mousemove', (e) => {
-            const rect = this.vizCanvas.getBoundingClientRect();
-            this.mouseX = e.clientX - rect.left;
-            this.mouseY = e.clientY - rect.top;
-            
-            // Check if hovering over any degree node
-            this.updateHoveredNode();
-        });
-        
-        this.vizCanvas.addEventListener('mouseleave', () => {
-            this.hoveredNode = null;
-        });
-    }
-    
-    updateHoveredNode() {
-        let newHoveredNode = null;
-        
-        // Only check degree nodes for hover
-        for (const node of this.vizNodes) {
-            if (node.type === 'degree') {
-                const distance = Math.sqrt(
-                    Math.pow(this.mouseX - node.x, 2) + 
-                    Math.pow(this.mouseY - node.y, 2)
-                );
-                
-                // Check if mouse is within hover radius (larger than visual radius)
-                if (distance <= node.radius + 30) { // 30px hover padding
-                    newHoveredNode = node;
-                    break;
-                }
-            }
-        }
-        
-        // Update cursor style
-        if (newHoveredNode && newHoveredNode.tracks && newHoveredNode.tracks.length > 0) {
-            this.vizCanvas.style.cursor = 'pointer';
-        } else {
-            this.vizCanvas.style.cursor = 'default';
-        }
-        
-        this.hoveredNode = newHoveredNode;
-    }
-
     hideVizArea() {
         const vizArea = document.getElementById('vizArea');
         vizArea.classList.remove('show');
@@ -1023,12 +950,13 @@ class TronCircuitboard {
         const centerX = canvasWidth / 2;
         const centerY = canvasHeight / 2;
         
-        // Define smaller margins to maximize usable space
-        const margin = 50; // Reduced from 80 to use more space
+        // Maximize usable space
+        const margin = 40;
         const usableWidth = canvasWidth - (margin * 2);
         const usableHeight = canvasHeight - (margin * 2);
+        const maxRadius = Math.min(usableWidth, usableHeight) / 2;
         
-        // Create central node
+        // Create central department node
         this.vizNodes.push({
             id: department.id,
             name: department.name,
@@ -1038,22 +966,158 @@ class TronCircuitboard {
             radius: 25
         });
         
-        // Use much more of the available space - with varied radii for visual interest
-        const maxRadius = Math.min(usableWidth, usableHeight) / 2;
-        const degreeRadiusMin = maxRadius * 0.25; // Minimum for degrees
-        const degreeRadiusMax = maxRadius * 0.45; // Maximum for degrees
-        const internalRadiusMin = maxRadius * 0.5; // Minimum for internal
-        const internalRadiusMax = maxRadius * 0.7; // Maximum for internal
-        const externalRadiusMin = maxRadius * 0.75; // Minimum for external
-        const externalRadiusMax = maxRadius * 0.95; // Maximum for external
+        // Radial model: Categories at first level, items at second level
+        const categoryRadius = maxRadius * 0.4; // Categories at mid-distance
+        const itemRadius = maxRadius * 0.85;    // Items near edge for maximum space
         
-        // Process degrees to group by main program
+        // Collect all data categories that exist for this department
+        const categories = [];
+        
+        // Process degrees
         const processedDegrees = this.processDegreeHierarchy(department.degrees || []);
+        if (processedDegrees.mainPrograms.length > 0) {
+            categories.push({
+                name: 'Degree Programs',
+                type: 'degrees',
+                items: processedDegrees.mainPrograms,
+                tracks: processedDegrees.tracks,
+                color: '#00FFFF'
+            });
+        }
         
-        // Separate different types for individual placement
-        const degreeNodes = processedDegrees.mainPrograms;
-        const internalNodes = department.internalPartners.map(p => ({ name: p, type: 'internal' }));
-        const externalNodes = department.externalPartners.map(p => ({ name: p, type: 'external' }));
+        // Internal partners
+        if (department.internalPartners.length > 0) {
+            categories.push({
+                name: 'Internal Partners',
+                type: 'internal',
+                items: department.internalPartners.map(p => ({ name: p })),
+                color: '#00FF88'
+            });
+        }
+        
+        // External partners
+        if (department.externalPartners.length > 0) {
+            categories.push({
+                name: 'External Partners', 
+                type: 'external',
+                items: department.externalPartners.map(p => ({ name: p })),
+                color: '#FF6600'
+            });
+        }
+        
+        // Place category nodes evenly around the center
+        categories.forEach((category, categoryIndex) => {
+            const categoryAngle = (categoryIndex * (Math.PI * 2)) / categories.length;
+            const categoryX = centerX + Math.cos(categoryAngle) * categoryRadius;
+            const categoryY = centerY + Math.sin(categoryAngle) * categoryRadius;
+            
+            // Create category node
+            const categoryId = `${department.id}_${category.type}`;
+            this.vizNodes.push({
+                id: categoryId,
+                name: category.name,
+                x: categoryX,
+                y: categoryY,
+                type: 'category',
+                categoryType: category.type,
+                radius: 18,
+                color: category.color
+            });
+            
+            // Link category to center
+            this.vizLinks.push({
+                source: department.id,
+                target: categoryId,
+                type: 'category',
+                opacity: 0
+            });
+            
+            // Place items around each category
+            this.placeItemsAroundCategory(category, categoryX, categoryY, categoryAngle, itemRadius, categoryId, department.id, centerX, centerY);
+        });
+        
+        // Start the visualization animation
+        this.animateVisualization();
+    }
+
+    placeItemsAroundCategory(category, categoryX, categoryY, categoryAngle, itemRadius, categoryId, departmentId, centerX, centerY) {
+        const canvasWidth = this.vizCanvas.width;
+        const canvasHeight = this.vizCanvas.height;
+        const margin = 40;
+        
+        category.items.forEach((item, itemIndex) => {
+            // Calculate angular range for this category's items
+            const itemCount = category.items.length;
+            const angularSpan = Math.PI / 2; // 90 degrees for each category's items
+            const itemAngle = categoryAngle - (angularSpan / 2) + (itemIndex * angularSpan / Math.max(itemCount - 1, 1));
+            
+            const itemX = centerX + Math.cos(itemAngle) * itemRadius;
+            const itemY = centerY + Math.sin(itemAngle) * itemRadius;
+            
+            // Ensure within bounds
+            const boundedPos = this.ensureWithinBounds(itemX, itemY, canvasWidth, canvasHeight, margin);
+            
+            const itemId = `${departmentId}_${category.type}_${item.name.replace(/\s+/g, '_')}`;
+            this.vizNodes.push({
+                id: itemId,
+                name: item.name,
+                x: boundedPos.x,
+                y: boundedPos.y,
+                type: category.type,
+                radius: category.type === 'degrees' ? 12 : (category.type === 'internal' ? 14 : 16),
+                color: category.color,
+                tracks: item.tracks
+            });
+            
+            // Link item to its category
+            this.vizLinks.push({
+                source: categoryId,
+                target: itemId,
+                type: category.type,
+                opacity: 0
+            });
+            
+            // If this is a degree with tracks, place tracks around it
+            if (category.type === 'degrees' && category.tracks && category.tracks[item.name]) {
+                const tracks = category.tracks[item.name];
+                this.placeTracksAroundItem(boundedPos.x, boundedPos.y, tracks, itemId, centerX, centerY);
+            }
+        });
+    }
+
+    placeTracksAroundItem(itemX, itemY, tracks, parentId, centerX, centerY) {
+        const trackRadius = 80; // Distance from parent item
+        
+        tracks.forEach((track, trackIndex) => {
+            const trackAngle = (trackIndex * (Math.PI * 2)) / tracks.length;
+            const trackX = itemX + Math.cos(trackAngle) * trackRadius;
+            const trackY = itemY + Math.sin(trackAngle) * trackRadius;
+            
+            // Ensure tracks don't go outside canvas bounds
+            const canvasWidth = this.vizCanvas.width;
+            const canvasHeight = this.vizCanvas.height;
+            const margin = 40;
+            const boundedPos = this.ensureWithinBounds(trackX, trackY, canvasWidth, canvasHeight, margin);
+            
+            const trackId = `${parentId}_track_${track.replace(/\s+/g, '_')}`;
+            this.vizNodes.push({
+                id: trackId,
+                name: track,
+                x: boundedPos.x,
+                y: boundedPos.y,
+                type: 'track',
+                radius: 8
+            });
+            
+            // Link track to its parent degree
+            this.vizLinks.push({
+                source: parentId,
+                target: trackId,
+                type: 'track',
+                opacity: 0
+            });
+        });
+    }
         
         // Place degree nodes with advanced collision detection and optimal positioning
         if (degreeNodes.length > 0) {
@@ -1128,6 +1192,13 @@ class TronCircuitboard {
                         hasCollision = true;
                     }
                     
+                    // Ensure no overlap with central node - increased protection
+                    const distanceFromCenter = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                    const minCenterDistance = maxRadius * 0.3; // Increased protection for central node
+                    if (distanceFromCenter < minCenterDistance) {
+                        hasCollision = true;
+                    }
+                    
                     // If no collision and better score, save this position
                     if (!hasCollision && positionScore > bestScore) {
                         bestScore = positionScore;
@@ -1178,15 +1249,10 @@ class TronCircuitboard {
                     opacity: 0
                 });
                 
-                // Store track data with the degree node for hover functionality
+                // Place sub-tracks with intelligent positioning
                 if (processedDegrees.tracks[degree.name]) {
-                    const storedNode = this.vizNodes.find(n => n.id === itemId);
-                    if (storedNode) {
-                        storedNode.tracks = processedDegrees.tracks[degree.name];
-                        storedNode.parentX = finalX;
-                        storedNode.parentY = finalY;
-                        storedNode.parentAngle = finalAngle;
-                    }
+                    const tracks = processedDegrees.tracks[degree.name];
+                    this.placeTracksAroundDegree(finalX, finalY, finalAngle, tracks, itemId, centerX, centerY, margin);
                 }
             });
         }
@@ -1242,6 +1308,13 @@ class TronCircuitboard {
                     const boundaryMargin = Math.max(partnerTextWidth / 2 + 60, 120); // Much larger margin
                     if (x < boundaryMargin || x > canvasWidth - boundaryMargin ||
                         y < 120 || y > canvasHeight - 120) { // Much larger vertical margins
+                        hasCollision = true;
+                    }
+                    
+                    // Ensure no overlap with central node
+                    const distanceFromCenter = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                    const minCenterDistance = maxRadius * 0.3; // Keep internal partners away from center
+                    if (distanceFromCenter < minCenterDistance) {
                         hasCollision = true;
                     }
                     
@@ -1345,6 +1418,13 @@ class TronCircuitboard {
                     const boundaryMargin = Math.max(partnerTextWidth / 2 + 70, 130); // Much larger margin
                     if (x < boundaryMargin || x > canvasWidth - boundaryMargin ||
                         y < 130 || y > canvasHeight - 130) { // Much larger vertical margins
+                        hasCollision = true;
+                    }
+                    
+                    // Ensure no overlap with central node
+                    const distanceFromCenter = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                    const minCenterDistance = maxRadius * 0.35; // Keep external partners away from center
+                    if (distanceFromCenter < minCenterDistance) {
                         hasCollision = true;
                     }
                     
@@ -1466,74 +1546,77 @@ class TronCircuitboard {
         const canvasHeight = this.vizCanvas.height;
         const maxRadius = Math.min(canvasWidth, canvasHeight) / 2;
         
-        // Much larger distances to prevent any overlap with varied lengths
-        const minTrackDistance = maxRadius * 0.35; // 35% of max radius minimum
-        const maxTrackDistance = maxRadius * 0.65; // 65% of max radius maximum
+        // Tracks should be placed CLOSE to their parent degree for clear association
+        const minTrackDistance = maxRadius * 0.15; // Much closer to parent degree
+        const maxTrackDistance = maxRadius * 0.25; // Keep tracks in tight cluster
         
         // Track all existing node positions to avoid overlaps
         const existingPositions = this.vizNodes.map(node => ({
             x: node.x,
             y: node.y,
-            textWidth: this.estimateTextWidth(node.name), // Dynamic text width estimation
-            textHeight: 50  // Increased text height estimate
+            textWidth: this.estimateTextWidth(node.name),
+            textHeight: 50
         }));
         
         tracks.forEach((track, trackIndex) => {
             let attempts = 0;
-            let validPosition = false;
-            let subX, subY;
             let bestPosition = null;
             let bestScore = -1;
             
-            // Try many more positions to find the best one
+            // Try many positions but keep them clustered around the parent degree
             while (attempts < 200) {
-                // Create much wider angular spacing with more variation
-                const baseAngle = degreeAngle + (trackIndex * (Math.PI * 2) / Math.max(tracks.length, 2));
-                const angleVariation = (Math.random() - 0.5) * Math.PI; // Full π variation
-                const finalAngle = baseAngle + angleVariation;
+                // Create tight angular clustering around the parent degree
+                const baseAngleFromCenter = Math.atan2(degreeY - centerY, degreeX - centerX);
+                const clusterSpread = Math.PI / 3; // 60 degree spread around parent
+                const trackAngle = baseAngleFromCenter + (Math.random() - 0.5) * clusterSpread;
                 
-                // Use random distance within range for varied line lengths
-                const distanceRange = maxTrackDistance - minTrackDistance;
-                const distance = minTrackDistance + (Math.random() * distanceRange);
+                // Distance from parent degree (not from center)
+                const distanceFromParent = minTrackDistance + (Math.random() * (maxTrackDistance - minTrackDistance));
                 
-                const testX = degreeX + Math.cos(finalAngle) * distance;
-                const testY = degreeY + Math.sin(finalAngle) * distance;
+                const testX = degreeX + Math.cos(trackAngle) * distanceFromParent;
+                const testY = degreeY + Math.sin(trackAngle) * distanceFromParent;
                 
-                // Calculate a score for this position (higher is better)
+                // Calculate score for this position
                 let positionScore = 0;
                 let hasCollision = false;
                 
                 const trackTextWidth = this.estimateTextWidth(track);
                 
-                // Check if position conflicts with any existing text
-                for (const existing of existingPositions) {
-                    const dx = Math.abs(testX - existing.x);
-                    const dy = Math.abs(testY - existing.y);
-                    
-                    // Much larger separation requirements for bigger fonts
-                    const requiredSeparationX = (existing.textWidth + trackTextWidth) / 2 + 120; // Much larger buffer
-                    const requiredSeparationY = 120; // Much larger vertical buffer
-                    
-                    if (dx < requiredSeparationX && dy < requiredSeparationY) {
-                        hasCollision = true;
-                        break;
-                    } else {
-                        // Add to score based on distance from other nodes (farther is better)
-                        const totalDistance = Math.sqrt(dx * dx + dy * dy);
-                        positionScore += totalDistance;
+                // Check distance from center - must not overlap central node with consistent protection
+                const distanceFromCenter = Math.sqrt(Math.pow(testX - centerX, 2) + Math.pow(testY - centerY, 2));
+                const minCenterDistance = maxRadius * 0.3; // Consistent central node protection
+                if (distanceFromCenter < minCenterDistance) {
+                    hasCollision = true;
+                } else {
+                    // Reward being close to parent degree
+                    const distanceFromDegree = Math.sqrt(Math.pow(testX - degreeX, 2) + Math.pow(testY - degreeY, 2));
+                    positionScore += (maxTrackDistance - distanceFromDegree) * 10; // Closer to parent = better
+                }
+                
+                // Check for text collisions with existing nodes
+                if (!hasCollision) {
+                    for (const existing of existingPositions) {
+                        const dx = Math.abs(testX - existing.x);
+                        const dy = Math.abs(testY - existing.y);
+                        
+                        const requiredSeparationX = (existing.textWidth + trackTextWidth) / 2 + 100;
+                        const requiredSeparationY = 100;
+                        
+                        if (dx < requiredSeparationX && dy < requiredSeparationY) {
+                            hasCollision = true;
+                            break;
+                        } else {
+                            const totalDistance = Math.sqrt(dx * dx + dy * dy);
+                            positionScore += totalDistance * 0.5; // Less weight than parent proximity
+                        }
                     }
                 }
                 
-                // Check canvas bounds with very generous margins for larger fonts
-                const boundaryMargin = Math.max(trackTextWidth / 2 + 70, 130); // Much larger margin
-                if (testX < boundaryMargin || testX > canvasWidth - boundaryMargin ||
-                    testY < 130 || testY > canvasHeight - 130) { // Much larger vertical margins
-                    hasCollision = true;
-                }
-                
-                // Check minimum distance from center
-                const distanceFromCenter = Math.sqrt(Math.pow(testX - centerX, 2) + Math.pow(testY - centerY, 2));
-                if (distanceFromCenter < minTrackDistance) {
+                // Check canvas bounds
+                const boundaryMargin = Math.max(trackTextWidth / 2 + 50, 100);
+                if (!hasCollision && 
+                    (testX < boundaryMargin || testX > canvasWidth - boundaryMargin ||
+                     testY < 100 || testY > canvasHeight - 100)) {
                     hasCollision = true;
                 }
                 
@@ -1541,26 +1624,27 @@ class TronCircuitboard {
                 if (!hasCollision && positionScore > bestScore) {
                     bestScore = positionScore;
                     bestPosition = { x: testX, y: testY };
-                    validPosition = true;
                 }
                 
                 attempts++;
             }
             
-            // Use best position found, or fallback
+            // Use best position found, or fallback close to parent
+            let finalX, finalY;
             if (bestPosition) {
-                subX = bestPosition.x;
-                subY = bestPosition.y;
+                finalX = bestPosition.x;
+                finalY = bestPosition.y;
             } else {
-                // Fallback: place with varied distance from center
-                const fallbackAngle = degreeAngle + (trackIndex * Math.PI * 2 / tracks.length);
-                const fallbackDistance = minTrackDistance + (Math.random() * (maxTrackDistance - minTrackDistance));
-                subX = degreeX + Math.cos(fallbackAngle) * fallbackDistance;
-                subY = degreeY + Math.sin(fallbackAngle) * fallbackDistance;
+                // Fallback: place directly outward from parent degree
+                const fallbackAngle = Math.atan2(degreeY - centerY, degreeX - centerX);
+                const offset = (trackIndex - tracks.length/2) * (Math.PI / 8); // Small spread
+                const adjustedAngle = fallbackAngle + offset;
+                finalX = degreeX + Math.cos(adjustedAngle) * minTrackDistance;
+                finalY = degreeY + Math.sin(adjustedAngle) * minTrackDistance;
             }
             
             // Final bounds check
-            const bounded = this.ensureWithinBounds(subX, subY, canvasWidth, canvasHeight, margin);
+            const bounded = this.ensureWithinBounds(finalX, finalY, canvasWidth, canvasHeight, margin);
             
             // Add this position to our tracking
             existingPositions.push({
@@ -1801,182 +1885,66 @@ class TronCircuitboard {
         this.vizCtx.fillStyle = 'rgba(0, 0, 0, 1)';
         this.vizCtx.fillRect(0, 0, this.vizCanvas.width, this.vizCanvas.height);
         
-        // Update animation time
-        this.animationTime += 0.016; // ~60fps
-        
         // Draw links
         this.vizLinks.forEach(link => {
             const sourceNode = this.vizNodes.find(n => n.id === link.source);
             const targetNode = this.vizNodes.find(n => n.id === link.target);
             
-            if (sourceNode && targetNode && link.opacity > 0 && this.shouldShowLink(sourceNode, targetNode, link.type)) {
+            if (sourceNode && targetNode && link.opacity > 0) {
                 this.drawVizLink(sourceNode, targetNode, link.type, link.opacity);
             }
         });
         
-        // Draw hover tracks if a degree node is hovered and should be shown
-        if (this.hoveredNode && this.hoveredNode.tracks && this.shouldShowNode(this.hoveredNode)) {
-            this.drawHoverTracks(this.hoveredNode);
-        }
-        
         // Draw nodes
         this.vizNodes.forEach(node => {
-            if (this.shouldShowNode(node)) {
-                this.drawVizNode(node);
-            }
+            this.drawVizNode(node);
         });
         
         // Draw labels
         this.vizNodes.forEach(node => {
-            if (this.shouldShowNode(node)) {
-                this.drawVizLabel(node);
-            }
-        });
-        
-        requestAnimationFrame(() => this.animateVisualization());
-    }
-
-    drawHoverTracks(degreeNode) {
-        const tracks = degreeNode.tracks;
-        const centerX = this.vizCanvas.width / 2;
-        const centerY = this.vizCanvas.height / 2;
-        const maxRadius = Math.min(this.vizCanvas.width, this.vizCanvas.height) / 2;
-        
-        // Tracks should be placed further out to avoid overlap
-        const minTrackDistance = maxRadius * 0.25; // Increased from 0.15
-        const maxTrackDistance = maxRadius * 0.4;  // Increased from 0.25
-        
-        tracks.forEach((track, trackIndex) => {
-            // Create wider angular spread around the parent degree
-            const baseAngleFromCenter = Math.atan2(degreeNode.y - centerY, degreeNode.x - centerX);
-            const clusterSpread = Math.PI / 1.5; // 120 degree spread (increased from 60)
-            
-            // Distribute tracks more evenly with better spacing
-            const trackAngle = baseAngleFromCenter - (clusterSpread / 2) + 
-                             (trackIndex * clusterSpread / Math.max(tracks.length - 1, 1));
-            
-            // Use varied distance based on index for better visual distribution
-            const distanceVariation = (trackIndex % 2) * 0.1; // Alternate between closer/farther
-            const distanceFromParent = minTrackDistance + distanceVariation * (maxTrackDistance - minTrackDistance);
-            
-            const trackX = degreeNode.x + Math.cos(trackAngle) * distanceFromParent;
-            const trackY = degreeNode.y + Math.sin(trackAngle) * distanceFromParent;
-            
-            // Draw track node
-            this.vizCtx.save();
-            
-            // Light blue for degree tracks with pulsing
-            const pulseIntensity = 0.7 + 0.3 * Math.sin(this.animationTime * 4);
-            this.vizCtx.fillStyle = '#80c0ff';
-            this.vizCtx.shadowColor = '#80c0ff';
-            this.vizCtx.shadowBlur = (6 + 3 * Math.sin(this.animationTime * 3)) * pulseIntensity;
-            this.vizCtx.strokeStyle = '#ffffff';
-            this.vizCtx.lineWidth = 1;
-            
-            this.vizCtx.beginPath();
-            this.vizCtx.arc(trackX, trackY, 8, 0, Math.PI * 2);
-            this.vizCtx.fill();
-            this.vizCtx.stroke();
-            
-            // Draw link from degree to track
-            this.vizCtx.globalAlpha = 0.8;
-            this.vizCtx.strokeStyle = '#80c0ff';
-            this.vizCtx.lineWidth = 1;
-            this.vizCtx.shadowBlur = 5;
-            this.vizCtx.beginPath();
-            this.vizCtx.moveTo(degreeNode.x, degreeNode.y);
-            this.vizCtx.lineTo(trackX, trackY);
-            this.vizCtx.stroke();
-            
-            // Draw track label with better positioning to avoid overlaps
-            this.vizCtx.globalAlpha = 1;
-            this.vizCtx.font = 'normal 13px "Orbitron", monospace'; // Slightly smaller font
-            this.vizCtx.fillStyle = '#ffffff';  // White text for consistency
-            this.vizCtx.strokeStyle = '#000000';
-            this.vizCtx.lineWidth = 2;
-            this.vizCtx.textAlign = 'center';
-            this.vizCtx.textBaseline = 'middle';
-            this.vizCtx.shadowColor = '#80c0ff';
-            this.vizCtx.shadowBlur = 6;
-            
-            // Position text further from the node to avoid overlaps
-            const textOffset = 25; // Increased from 20
-            const textX = trackX + Math.cos(trackAngle) * textOffset;
-            const textY = trackY + Math.sin(trackAngle) * textOffset;
-            
-            this.vizCtx.strokeText(track, textX, textY);
-            this.vizCtx.fillText(track, textX, textY);
-            
-            this.vizCtx.restore();
+            this.drawVizLabel(node);
         });
     }
-
-    // Filtering system methods
-    setFilter(filterType) {
-        this.activeFilter = this.activeFilter === filterType ? null : filterType;
-    }
-
-    shouldShowNode(node) {
-        if (!this.activeFilter) return true;
-        
-        // Always show central department node
-        if (node.type === 'central') return true;
-        
-        // Special handling for degree tracks - show with degree filter
-        if (this.activeFilter === 'degree' && (node.type === 'degree' || node.type === 'degree-track')) {
-            return true;
-        }
-        
-        return node.type === this.activeFilter;
-    }
-
-    shouldShowLink(source, target, linkType) {
-        if (!this.activeFilter) return true;
-        
-        // Always show links to/from central department
-        if (source.type === 'central' || target.type === 'central') {
-            // Show if the other node should be shown
-            const otherNode = source.type === 'central' ? target : source;
-            return this.shouldShowNode(otherNode);
-        }
-        
-        // Show link if both nodes should be shown
-        const showSource = this.shouldShowNode(source);
-        const showTarget = this.shouldShowNode(target);
-        
-        return showSource && showTarget;
-    }
-
+    
     drawVizLink(source, target, linkType, opacity) {
         this.vizCtx.save();
         this.vizCtx.globalAlpha = opacity;
         
-        // Set consistent line colors based on type to match legend
+        // Set different line characteristics based on type
         let pulseWidth, pulseGlow, strokeColor, shadowColor;
         
         if (linkType === 'degree') {
-            // Consistent cyan for degrees - matches legend
+            // Shortest, thinnest lines for degrees - mixed cool colors
             pulseWidth = 1.5 + Math.sin(this.animationTime * 4) * 0.3;
             pulseGlow = 6 + Math.sin(this.animationTime * 3) * 3;
-            strokeColor = '#00ffff'; // Consistent cyan
+            // Mix of cool colors for degrees
+            const degreeColors = ['#00ffff', '#0080ff', '#8000ff', '#ff00c0'];
+            const colorIndex = Math.abs(source.x + target.x) % degreeColors.length;
+            strokeColor = degreeColors[Math.floor(colorIndex)];
             shadowColor = strokeColor;
         } else if (linkType === 'degree-track') {
-            // Light blue for degree tracks - matches legend
+            // Very thin lines for degree tracks - lighter versions
             pulseWidth = 1 + Math.sin(this.animationTime * 5) * 0.2;
             pulseGlow = 4 + Math.sin(this.animationTime * 4) * 2;
             strokeColor = '#80c0ff'; // Light blue for tracks
             shadowColor = strokeColor;
         } else if (linkType === 'internal') {
-            // Consistent yellow for internal - matches legend
+            // Medium thickness for internal - warm colors
             pulseWidth = 2.5 + Math.sin(this.animationTime * 3) * 0.5;
             pulseGlow = 12 + Math.sin(this.animationTime * 2) * 6;
-            strokeColor = '#ffff00'; // Consistent yellow
+            // Mix of warm colors for internal
+            const internalColors = ['#ffff00', '#ff8000', '#ff0040', '#c0ff00'];
+            const colorIndex = Math.abs(source.y + target.y) % internalColors.length;
+            strokeColor = internalColors[Math.floor(colorIndex)];
             shadowColor = strokeColor;
         } else if (linkType === 'external') {
-            // Consistent magenta for external - matches legend
+            // Thickest lines for external - vibrant mixed colors
             pulseWidth = 3 + Math.sin(this.animationTime * 2) * 0.8;
             pulseGlow = 18 + Math.sin(this.animationTime * 1.5) * 8;
-            strokeColor = '#ff00ff'; // Consistent magenta
+            // Mix of vibrant colors for external
+            const externalColors = ['#ff00ff', '#00ff40', '#ff4000', '#4000ff', '#ff8040'];
+            const colorIndex = Math.abs(source.x * source.y + target.x * target.y) % externalColors.length;
+            strokeColor = externalColors[Math.floor(colorIndex)];
             shadowColor = strokeColor;
         } else {
             // Default
@@ -2002,7 +1970,7 @@ class TronCircuitboard {
     drawVizNode(node) {
         this.vizCtx.save();
         
-        // Add pulsing effect based on animation time (except for central)
+        // Add pulsing effect based on animation time
         const pulseIntensity = 0.8 + 0.2 * Math.sin(this.animationTime * 2);
         let shadowBlur = 10;
         let fillColor, shadowColor;
@@ -2010,26 +1978,32 @@ class TronCircuitboard {
         if (node.type === 'central') {
             fillColor = '#ff6600';
             shadowColor = '#ff6600';
-            shadowBlur = 25; // Fixed glow, no pulsing
+            shadowBlur = 25 + 12 * Math.sin(this.animationTime * 1.5);
         } else if (node.type === 'degree') {
-            // Consistent cyan for degrees - matches legend
-            fillColor = '#00ffff';
-            shadowColor = '#00ffff';
+            // Mixed cool colors for degrees - smaller nodes
+            const degreeColors = ['#00ffff', '#0080ff', '#8000ff', '#ff00c0'];
+            const colorIndex = Math.abs(node.x + node.y) % degreeColors.length;
+            fillColor = degreeColors[Math.floor(colorIndex)];
+            shadowColor = fillColor;
             shadowBlur = 8 + 4 * Math.sin(this.animationTime * 2.5);
         } else if (node.type === 'degree-track') {
-            // Light blue for degree tracks - matches legend
+            // Light blue for degree tracks - smallest nodes
             fillColor = '#80c0ff';
             shadowColor = '#80c0ff';
             shadowBlur = 6 + 3 * Math.sin(this.animationTime * 3);
         } else if (node.type === 'internal') {
-            // Consistent yellow for internal partners - matches legend
-            fillColor = '#ffff00';
-            shadowColor = '#ffff00';
+            // Mixed warm colors for internal partners - medium nodes
+            const internalColors = ['#ffff00', '#ff8000', '#ff0040', '#c0ff00'];
+            const colorIndex = Math.abs(node.y * 2 + node.x) % internalColors.length;
+            fillColor = internalColors[Math.floor(colorIndex)];
+            shadowColor = fillColor;
             shadowBlur = 12 + 6 * Math.sin(this.animationTime * 2);
         } else if (node.type === 'external') {
-            // Consistent magenta for external partners - matches legend
-            fillColor = '#ff00ff';
-            shadowColor = '#ff00ff';
+            // Mixed vibrant colors for external partners - largest nodes
+            const externalColors = ['#ff00ff', '#00ff40', '#ff4000', '#4000ff', '#ff8040'];
+            const colorIndex = Math.abs(node.x * node.y) % externalColors.length;
+            fillColor = externalColors[Math.floor(colorIndex)];
+            shadowColor = fillColor;
             shadowBlur = 15 + 8 * Math.sin(this.animationTime * 1.8);
         } else {
             fillColor = '#00ffff';
@@ -2039,13 +2013,14 @@ class TronCircuitboard {
         
         this.vizCtx.fillStyle = fillColor;
         this.vizCtx.shadowColor = shadowColor;
-        // Apply pulse intensity only to non-central nodes
-        this.vizCtx.shadowBlur = node.type === 'central' ? shadowBlur : shadowBlur * pulseIntensity;
+        this.vizCtx.shadowBlur = shadowBlur * pulseIntensity;
         this.vizCtx.strokeStyle = '#ffffff';
         this.vizCtx.lineWidth = node.type === 'central' ? 3 : 2;
         
-        // Remove size pulsing for central node - use fixed radius
-        const radius = node.radius;
+        // Add slight size pulsing for central node
+        const radius = node.type === 'central' ? 
+            node.radius + 4 * Math.sin(this.animationTime) : 
+            node.radius;
         
         this.vizCtx.beginPath();
         this.vizCtx.arc(node.x, node.y, radius, 0, Math.PI * 2);
@@ -2214,8 +2189,8 @@ class TronCircuitboard {
                 this.vizCtx.fillText(line.trim(), textX, startY + index * lineHeight);
             });
         } else if (node.type === 'internal') {
-            // Internal partner nodes with white font for consistency
-            this.vizCtx.fillStyle = '#ffffff';  // White font for consistency
+            // Internal partner nodes with larger colorful font - increased size
+            this.vizCtx.fillStyle = '#ffff80';  // Light yellow for internal
             this.vizCtx.font = 'bold 17px Orbitron'; // Increased to match external partnerships
             this.vizCtx.shadowColor = '#000000';
             this.vizCtx.shadowBlur = 4;
@@ -2249,8 +2224,8 @@ class TronCircuitboard {
                 this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
             });
         } else if (node.type === 'external') {
-            // External partner nodes with white font for consistency
-            this.vizCtx.fillStyle = '#ffffff';  // White font for consistency
+            // External partner nodes with largest colorful font
+            this.vizCtx.fillStyle = '#ff80ff';  // Light magenta for external
             this.vizCtx.font = 'bold 17px Orbitron';
             this.vizCtx.shadowColor = '#000000';
             this.vizCtx.shadowBlur = 4;

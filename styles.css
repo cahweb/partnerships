@@ -342,6 +342,77 @@ body, html {
         inset 0 0 20px rgba(0, 255, 255, 0.2);
 }
 
+/* Visualization Legend */
+.viz-legend {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #00ffff;
+    border-radius: 10px;
+    padding: 15px;
+    backdrop-filter: blur(10px);
+    z-index: 10;
+}
+
+.viz-legend h4 {
+    color: #00ffff;
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    margin: 0 0 10px 0;
+    text-align: center;
+    text-shadow: 0 0 5px #00ffff;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin: 6px 0;
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.legend-item:hover {
+    background: rgba(0, 255, 255, 0.2);
+    border: 1px solid #00ffff;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    border: 1px solid #ffffff;
+    box-shadow: 0 0 5px currentColor;
+}
+
+.legend-color.central {
+    background: #ff6600;
+    color: #ff6600;
+}
+
+.legend-color.degree {
+    background: #00ffff;  /* Solid cyan to match degree lines */
+    color: #00ffff;
+}
+
+.legend-color.internal {
+    background: #ffff00;  /* Solid yellow to match internal lines */
+    color: #ffff00;
+}
+
+.legend-color.external {
+    background: #ff00ff;  /* Solid magenta to match external lines */
+    color: #ff00ff;
+}
+
 /* Main canvas fade out state */
 #circuitCanvas.fade-out {
     opacity: 0.2;
