@@ -159,8 +159,11 @@ class TronCircuitboard {
                     if (!this.nodesGenerated) {
                         this.generateNodes();
                     } else {
-                        // If nodes are already generated, show the college data card
-                        this.showDataCard('college-of-arts-and-humanities');
+                        // If nodes are already generated, enter detail view for the college
+                        const collegeTextElement = document.getElementById('digitalText');
+                        if (collegeTextElement) {
+                            this.enterDetailView(collegeTextElement, 'college-of-arts-and-humanities');
+                        }
                     }
                 });
             } else {
@@ -976,33 +979,116 @@ class TronCircuitboard {
         const internalNodes = department.internalPartners.map(p => ({ name: p, type: 'internal' }));
         const externalNodes = department.externalPartners.map(p => ({ name: p, type: 'external' }));
         
-        // Place degree nodes with better distribution and more spacing
+        // Place degree nodes with advanced collision detection and optimal positioning
         if (degreeNodes.length > 0) {
+            // Track all placed degree positions
+            const placedDegreeNodes = [];
+            
             degreeNodes.forEach((degree, index) => {
-                // Ensure minimum angular separation between degrees
-                const minAngleSeparation = (Math.PI * 2) / Math.max(degreeNodes.length * 1.5, 4);
-                let angle = this.getDistributedAngle(index, degreeNodes.length, 0);
+                let attempts = 0;
+                let bestPosition = null;
+                let bestScore = -1;
                 
-                // Ensure no two degrees are too close angularly
-                if (index > 0) {
-                    const prevAngle = this.getDistributedAngle(index - 1, degreeNodes.length, 0);
-                    const angleDiff = Math.abs(angle - prevAngle);
-                    if (angleDiff < minAngleSeparation) {
-                        angle = prevAngle + minAngleSeparation;
+                // Try many positions to find the optimal one
+                while (attempts < 150) {
+                    // Try different angular positions with wide spacing
+                    const baseAngle = (index * (Math.PI * 2) / degreeNodes.length);
+                    const randomOffset = (Math.random() - 0.5) * Math.PI; // Large random variation
+                    let angle = baseAngle + randomOffset;
+                    
+                    // Add some distance variation too
+                    const radiusVariation = (Math.random() - 0.5) * (degreeRadius * 0.3);
+                    const testRadius = degreeRadius + radiusVariation;
+                    
+                    angle = this.adjustAngleToAvoidTextLine(angle);
+                    
+                    const x = centerX + Math.cos(angle) * testRadius;
+                    const y = centerY + Math.sin(angle) * testRadius;
+                    
+                    // Calculate position score (higher is better)
+                    let positionScore = 0;
+                    let hasCollision = false;
+                    
+                    const degreeTextWidth = this.estimateTextWidth(degree.name);
+                    
+                    // Check for text collisions with all existing degree nodes
+                    for (const existing of placedDegreeNodes) {
+                        const dx = Math.abs(x - existing.x);
+                        const dy = Math.abs(y - existing.y);
+                        
+                        // Much larger separation for degree text (they tend to be long)
+                        const requiredSeparationX = (degreeTextWidth + existing.textWidth) / 2 + 80; // Large buffer
+                        const requiredSeparationY = 120;  // Very tall vertical separation
+                        
+                        if (dx < requiredSeparationX && dy < requiredSeparationY) {
+                            hasCollision = true;
+                            break;
+                        } else {
+                            // Reward positions that are far from other nodes
+                            const totalDistance = Math.sqrt(dx * dx + dy * dy);
+                            positionScore += totalDistance;
+                        }
                     }
+                    
+                    // Check angular separation from other degrees
+                    const minAngleSeparation = (Math.PI * 2) / Math.max(degreeNodes.length * 2, 6);
+                    for (const existing of placedDegreeNodes) {
+                        const existingAngle = existing.angle;
+                        const angleDiff = Math.abs(angle - existingAngle);
+                        const normalizedDiff = Math.min(angleDiff, (Math.PI * 2) - angleDiff);
+                        if (normalizedDiff < minAngleSeparation) {
+                            hasCollision = true;
+                            break;
+                        } else {
+                            // Reward good angular separation
+                            positionScore += normalizedDiff * 100;
+                        }
+                    }
+                    
+                    // Check canvas bounds with generous margins
+                    const boundaryMargin = Math.max(degreeTextWidth / 2 + 40, 100);
+                    if (x < boundaryMargin || x > canvasWidth - boundaryMargin ||
+                        y < 100 || y > canvasHeight - 100) {
+                        hasCollision = true;
+                    }
+                    
+                    // If no collision and better score, save this position
+                    if (!hasCollision && positionScore > bestScore) {
+                        bestScore = positionScore;
+                        bestPosition = { x: x, y: y, angle: angle, textWidth: degreeTextWidth };
+                    }
+                    
+                    attempts++;
                 }
                 
-                angle = this.adjustAngleToAvoidTextLine(angle);
+                // Use best position found, or fallback
+                let finalX, finalY, finalAngle;
+                if (bestPosition) {
+                    finalX = bestPosition.x;
+                    finalY = bestPosition.y;
+                    finalAngle = bestPosition.angle;
+                } else {
+                    // Fallback: force maximum angular separation
+                    finalAngle = index * (Math.PI * 2) / degreeNodes.length;
+                    finalAngle = this.adjustAngleToAvoidTextLine(finalAngle);
+                    finalX = centerX + Math.cos(finalAngle) * degreeRadius;
+                    finalY = centerY + Math.sin(finalAngle) * degreeRadius;
+                }
                 
-                const x = centerX + Math.cos(angle) * degreeRadius;
-                const y = centerY + Math.sin(angle) * degreeRadius;
+                // Record this position for future collision checks
+                placedDegreeNodes.push({ 
+                    x: finalX, 
+                    y: finalY, 
+                    angle: finalAngle,
+                    textWidth: this.estimateTextWidth(degree.name)
+                });
                 
                 const itemId = degree.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
                 this.vizNodes.push({
                     id: itemId,
                     name: degree.name,
-                    x: x,
-                    y: y,
+                    x: finalX,
+                    y: finalY,
                     type: 'degree',
                     radius: 12,
                     isMainDegree: true
@@ -1018,22 +1104,93 @@ class TronCircuitboard {
                 // Place sub-tracks with intelligent positioning
                 if (processedDegrees.tracks[degree.name]) {
                     const tracks = processedDegrees.tracks[degree.name];
-                    this.placeTracksAroundDegree(x, y, angle, tracks, itemId, centerX, centerY, margin);
+                    this.placeTracksAroundDegree(finalX, finalY, finalAngle, tracks, itemId, centerX, centerY, margin);
                 }
             });
         }
         
-        // Place internal partners with better spacing
+        // Place internal partners with advanced collision detection
         if (internalNodes.length > 0) {
+            const placedInternalNodes = [];
+            
             internalNodes.forEach((partner, index) => {
-                let angle = this.getDistributedAngle(index, internalNodes.length, Math.PI / 6); // Offset from degrees
-                angle = this.adjustAngleToAvoidTextLine(angle);
+                let attempts = 0;
+                let bestPosition = null;
+                let bestScore = -1;
                 
-                const x = centerX + Math.cos(angle) * internalRadius;
-                const y = centerY + Math.sin(angle) * internalRadius;
+                while (attempts < 100) {
+                    let angle = this.getDistributedAngle(index, internalNodes.length, Math.PI / 6);
+                    const randomOffset = (Math.random() - 0.5) * (Math.PI / 2);
+                    angle += randomOffset;
+                    angle = this.adjustAngleToAvoidTextLine(angle);
+                    
+                    // Add some radius variation
+                    const radiusVariation = (Math.random() - 0.5) * (internalRadius * 0.2);
+                    const testRadius = internalRadius + radiusVariation;
+                    
+                    const x = centerX + Math.cos(angle) * testRadius;
+                    const y = centerY + Math.sin(angle) * testRadius;
+                    
+                    // Calculate position score
+                    let positionScore = 0;
+                    let hasCollision = false;
+                    
+                    const partnerTextWidth = this.estimateTextWidth(partner.name);
+                    
+                    // Check for collisions with existing nodes (including degrees and other partners)
+                    const allExistingNodes = [...this.vizNodes, ...placedInternalNodes];
+                    for (const existing of allExistingNodes) {
+                        const dx = Math.abs(x - existing.x);
+                        const dy = Math.abs(y - existing.y);
+                        
+                        const existingTextWidth = existing.textWidth || this.estimateTextWidth(existing.name || '');
+                        const requiredSeparationX = (partnerTextWidth + existingTextWidth) / 2 + 50;
+                        const requiredSeparationY = 80;
+                        
+                        if (dx < requiredSeparationX && dy < requiredSeparationY) {
+                            hasCollision = true;
+                            break;
+                        } else {
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            positionScore += distance;
+                        }
+                    }
+                    
+                    // Check canvas bounds
+                    const boundaryMargin = Math.max(partnerTextWidth / 2 + 30, 70);
+                    if (x < boundaryMargin || x > canvasWidth - boundaryMargin ||
+                        y < 70 || y > canvasHeight - 70) {
+                        hasCollision = true;
+                    }
+                    
+                    if (!hasCollision && positionScore > bestScore) {
+                        bestScore = positionScore;
+                        bestPosition = { x: x, y: y, textWidth: partnerTextWidth };
+                    }
+                    
+                    attempts++;
+                }
+                
+                let finalX, finalY;
+                if (bestPosition) {
+                    finalX = bestPosition.x;
+                    finalY = bestPosition.y;
+                } else {
+                    // Fallback positioning
+                    const angle = index * (Math.PI * 2) / internalNodes.length + Math.PI / 6;
+                    const adjustedAngle = this.adjustAngleToAvoidTextLine(angle);
+                    finalX = centerX + Math.cos(adjustedAngle) * internalRadius;
+                    finalY = centerY + Math.sin(adjustedAngle) * internalRadius;
+                }
                 
                 // Ensure within bounds
-                const boundedPos = this.ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin);
+                const boundedPos = this.ensureWithinBounds(finalX, finalY, canvasWidth, canvasHeight, margin);
+                placedInternalNodes.push({ 
+                    x: boundedPos.x, 
+                    y: boundedPos.y, 
+                    name: partner.name,
+                    textWidth: this.estimateTextWidth(partner.name)
+                });
                 
                 const itemId = partner.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
                 this.vizNodes.push({
@@ -1054,17 +1211,88 @@ class TronCircuitboard {
             });
         }
         
-        // Place external partners with maximum utilization
+        // Place external partners with advanced collision detection
         if (externalNodes.length > 0) {
+            const placedExternalNodes = [];
+            
             externalNodes.forEach((partner, index) => {
-                let angle = this.getDistributedAngle(index, externalNodes.length, Math.PI / 3); // Different offset
-                angle = this.adjustAngleToAvoidTextLine(angle);
+                let attempts = 0;
+                let bestPosition = null;
+                let bestScore = -1;
                 
-                const x = centerX + Math.cos(angle) * externalRadius;
-                const y = centerY + Math.sin(angle) * externalRadius;
+                while (attempts < 100) {
+                    let angle = this.getDistributedAngle(index, externalNodes.length, Math.PI / 3);
+                    const randomOffset = (Math.random() - 0.5) * (Math.PI / 2);
+                    angle += randomOffset;
+                    angle = this.adjustAngleToAvoidTextLine(angle);
+                    
+                    // Add radius variation
+                    const radiusVariation = (Math.random() - 0.5) * (externalRadius * 0.15);
+                    const testRadius = externalRadius + radiusVariation;
+                    
+                    const x = centerX + Math.cos(angle) * testRadius;
+                    const y = centerY + Math.sin(angle) * testRadius;
+                    
+                    // Calculate position score
+                    let positionScore = 0;
+                    let hasCollision = false;
+                    
+                    const partnerTextWidth = this.estimateTextWidth(partner.name);
+                    
+                    // Check for collisions with ALL existing nodes
+                    const allExistingNodes = [...this.vizNodes, ...placedExternalNodes];
+                    for (const existing of allExistingNodes) {
+                        const dx = Math.abs(x - existing.x);
+                        const dy = Math.abs(y - existing.y);
+                        
+                        const existingTextWidth = existing.textWidth || this.estimateTextWidth(existing.name || '');
+                        const requiredSeparationX = (partnerTextWidth + existingTextWidth) / 2 + 60; // Larger buffer for external
+                        const requiredSeparationY = 90; // Larger vertical buffer
+                        
+                        if (dx < requiredSeparationX && dy < requiredSeparationY) {
+                            hasCollision = true;
+                            break;
+                        } else {
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            positionScore += distance;
+                        }
+                    }
+                    
+                    // Check canvas bounds
+                    const boundaryMargin = Math.max(partnerTextWidth / 2 + 40, 80);
+                    if (x < boundaryMargin || x > canvasWidth - boundaryMargin ||
+                        y < 80 || y > canvasHeight - 80) {
+                        hasCollision = true;
+                    }
+                    
+                    if (!hasCollision && positionScore > bestScore) {
+                        bestScore = positionScore;
+                        bestPosition = { x: x, y: y, textWidth: partnerTextWidth };
+                    }
+                    
+                    attempts++;
+                }
+                
+                let finalX, finalY;
+                if (bestPosition) {
+                    finalX = bestPosition.x;
+                    finalY = bestPosition.y;
+                } else {
+                    // Fallback positioning
+                    const angle = index * (Math.PI * 2) / externalNodes.length + Math.PI / 3;
+                    const adjustedAngle = this.adjustAngleToAvoidTextLine(angle);
+                    finalX = centerX + Math.cos(adjustedAngle) * externalRadius;
+                    finalY = centerY + Math.sin(adjustedAngle) * externalRadius;
+                }
                 
                 // Ensure within bounds
-                const boundedPos = this.ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin);
+                const boundedPos = this.ensureWithinBounds(finalX, finalY, canvasWidth, canvasHeight, margin);
+                placedExternalNodes.push({ 
+                    x: boundedPos.x, 
+                    y: boundedPos.y, 
+                    name: partner.name,
+                    textWidth: this.estimateTextWidth(partner.name)
+                });
                 
                 const itemId = partner.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
                 this.vizNodes.push({
@@ -1073,7 +1301,7 @@ class TronCircuitboard {
                     x: boundedPos.x,
                     y: boundedPos.y,
                     type: 'external',
-                    radius: 16
+                    radius: 10
                 });
                 
                 this.vizLinks.push({
@@ -1131,6 +1359,17 @@ class TronCircuitboard {
         return (baseAngle * spacingFactor) + stagger;
     }
     
+    estimateTextWidth(text) {
+        // Estimate text width based on character count and font characteristics
+        // Orbitron font is roughly 0.6 times character count in pixels at 14px font size
+        const avgCharWidth = 9; // Approximate width per character in Orbitron
+        const minWidth = 80; // Minimum text width
+        const maxWidth = 300; // Maximum reasonable text width
+        
+        const estimatedWidth = Math.min(maxWidth, Math.max(minWidth, text.length * avgCharWidth));
+        return estimatedWidth;
+    }
+
     ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin) {
         // Ensure nodes stay within the canvas bounds with proper margins
         const clampedX = Math.max(margin, Math.min(x, canvasWidth - margin));
@@ -1144,41 +1383,108 @@ class TronCircuitboard {
         const canvasHeight = this.vizCanvas.height;
         const maxRadius = Math.min(canvasWidth, canvasHeight) / 2;
         
-        // Use percentage-based distances to ensure proper scaling
-        const minTrackDistance = maxRadius * 0.15; // 15% of max radius minimum
-        const maxTrackDistance = maxRadius * 0.25; // 25% of max radius maximum
+        // Much larger distances to prevent any overlap
+        const minTrackDistance = maxRadius * 0.3; // 30% of max radius minimum
+        const maxTrackDistance = maxRadius * 0.55; // 55% of max radius maximum
+        
+        // Track all existing node positions to avoid overlaps
+        const existingPositions = this.vizNodes.map(node => ({
+            x: node.x,
+            y: node.y,
+            textWidth: this.estimateTextWidth(node.name), // Dynamic text width estimation
+            textHeight: 50  // Increased text height estimate
+        }));
         
         tracks.forEach((track, trackIndex) => {
-            // Ensure each track gets a unique angle with no overlap
-            const baseAngle = degreeAngle + (trackIndex * (Math.PI * 2) / tracks.length);
-            const angleSpread = Math.PI / (tracks.length * 0.75); // More spacing between tracks
-            const finalAngle = baseAngle + (trackIndex - tracks.length/2) * angleSpread;
+            let attempts = 0;
+            let validPosition = false;
+            let subX, subY;
+            let bestPosition = null;
+            let bestScore = -1;
             
-            // Use progressive distances to avoid clustering
-            const distanceFromDegree = minTrackDistance + (trackIndex * (maxTrackDistance - minTrackDistance) / Math.max(1, tracks.length - 1));
+            // Try many more positions to find the best one
+            while (attempts < 200) {
+                // Create much wider angular spacing with more variation
+                const baseAngle = degreeAngle + (trackIndex * (Math.PI * 2) / Math.max(tracks.length, 2));
+                const angleVariation = (Math.random() - 0.5) * Math.PI; // Full π variation
+                const finalAngle = baseAngle + angleVariation;
+                
+                // Progressive distance from degree node with more spread
+                const distanceVariation = Math.random() * (maxTrackDistance - minTrackDistance);
+                const distance = minTrackDistance + distanceVariation;
+                
+                const testX = degreeX + Math.cos(finalAngle) * distance;
+                const testY = degreeY + Math.sin(finalAngle) * distance;
+                
+                // Calculate a score for this position (higher is better)
+                let positionScore = 0;
+                let hasCollision = false;
+                
+                const trackTextWidth = this.estimateTextWidth(track);
+                
+                // Check if position conflicts with any existing text
+                for (const existing of existingPositions) {
+                    const dx = Math.abs(testX - existing.x);
+                    const dy = Math.abs(testY - existing.y);
+                    
+                    // Much larger separation requirements
+                    const requiredSeparationX = (existing.textWidth + trackTextWidth) / 2 + 60; // 60px buffer
+                    const requiredSeparationY = 70; // 70px vertical buffer
+                    
+                    if (dx < requiredSeparationX && dy < requiredSeparationY) {
+                        hasCollision = true;
+                        break;
+                    } else {
+                        // Add to score based on distance from other nodes (farther is better)
+                        const totalDistance = Math.sqrt(dx * dx + dy * dy);
+                        positionScore += totalDistance;
+                    }
+                }
+                
+                // Check canvas bounds with generous margins
+                const boundaryMargin = Math.max(trackTextWidth / 2 + 40, 80);
+                if (testX < boundaryMargin || testX > canvasWidth - boundaryMargin ||
+                    testY < 80 || testY > canvasHeight - 80) {
+                    hasCollision = true;
+                }
+                
+                // Check minimum distance from center
+                const distanceFromCenter = Math.sqrt(Math.pow(testX - centerX, 2) + Math.pow(testY - centerY, 2));
+                if (distanceFromCenter < minTrackDistance) {
+                    hasCollision = true;
+                }
+                
+                // If no collision and better score, save this position
+                if (!hasCollision && positionScore > bestScore) {
+                    bestScore = positionScore;
+                    bestPosition = { x: testX, y: testY };
+                    validPosition = true;
+                }
+                
+                attempts++;
+            }
             
-            let subX = degreeX + Math.cos(finalAngle) * distanceFromDegree;
-            let subY = degreeY + Math.sin(finalAngle) * distanceFromDegree;
+            // Use best position found, or fallback
+            if (bestPosition) {
+                subX = bestPosition.x;
+                subY = bestPosition.y;
+            } else {
+                // Fallback: place far from center with maximum angular separation
+                const fallbackAngle = degreeAngle + (trackIndex * Math.PI * 2 / tracks.length);
+                subX = degreeX + Math.cos(fallbackAngle) * maxTrackDistance;
+                subY = degreeY + Math.sin(fallbackAngle) * maxTrackDistance;
+            }
             
-            // Ensure within canvas bounds with proper margins
+            // Final bounds check
             const bounded = this.ensureWithinBounds(subX, subY, canvasWidth, canvasHeight, margin);
             
-            // Additional check: if too close to center, push further out
-            const distanceFromCenter = Math.sqrt(
-                Math.pow(bounded.x - centerX, 2) + Math.pow(bounded.y - centerY, 2)
-            );
-            
-            const minCenterDistance = maxRadius * 0.4; // Must be at least 40% from center
-            if (distanceFromCenter < minCenterDistance) {
-                const pushAngle = Math.atan2(bounded.y - centerY, bounded.x - centerX);
-                bounded.x = centerX + Math.cos(pushAngle) * minCenterDistance;
-                bounded.y = centerY + Math.sin(pushAngle) * minCenterDistance;
-                
-                // Re-apply bounds check
-                const finalBounded = this.ensureWithinBounds(bounded.x, bounded.y, canvasWidth, canvasHeight, margin);
-                bounded.x = finalBounded.x;
-                bounded.y = finalBounded.y;
-            }
+            // Add this position to our tracking
+            existingPositions.push({
+                x: bounded.x,
+                y: bounded.y,
+                textWidth: this.estimateTextWidth(track),
+                textHeight: 50
+            });
             
             const trackId = track.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
             this.vizNodes.push({
