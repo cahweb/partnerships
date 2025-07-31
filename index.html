@@ -25,6 +25,23 @@
         <canvas id="nodeVizCanvas"></canvas>
         <button id="backButton" class="back-button">← Back to Overview</button>
     </div>
+    
+    <!-- Popup Window -->
+    <div id="popupOverlay" class="popup-overlay">
+        <div id="popupWindow" class="popup-window">
+            <div class="popup-header">
+                <h3 id="popupTitle" class="popup-title"></h3>
+                <button id="popupClose" class="popup-close">×</button>
+            </div>
+            <div class="popup-content">
+                <iframe id="popupIframe" class="popup-iframe" src="" title=""></iframe>
+                <div id="popupFallback" class="popup-fallback" style="display: none;">
+                    <p>Unable to load content. <a id="popupDirectLink" href="" target="_blank">Visit site directly →</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script src="script.js"></script>
 </body>
 </html>

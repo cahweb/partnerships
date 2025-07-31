@@ -3,8 +3,10 @@
     {
       "id": "college-of-arts-and-humanities",
       "name": "College of Arts and Humanities",
+      "image": "cah.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/2024-25/",
       "degrees": [
-        "Texts and Technology, PhD",
+        "Texts and Technology PhD",
         "Themed Experience MS"
       ],
       "internalPartners": [
@@ -65,6 +67,8 @@
     {
       "id": "school-of-performing-arts",
       "name": "School of Performing Arts",
+      "image": "spa.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/performing-arts-2025/",
       "degrees": [
         "Theatre BA",
         "Theatre BFA: Acting Track",
@@ -131,6 +135,8 @@
     {
       "id": "school-of-visual-arts-and-design",
       "name": "School of Visual Arts and Design",
+      "image": "svad.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/svad-2025/",
       "degrees": [
         "Architecture BDes",
         "Art BA: Immersive Experience Design Track",
@@ -211,6 +217,8 @@
         "English MA: Technical Communication",
         "English MA: Literary, Cultural, and Textual Studies"
       ],
+      "image": "english.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/english-2025/",
       "internalPartners": [
         "Study abroad opportunities with UCF Abroad"
       ],
@@ -255,6 +263,8 @@
     {
       "id": "history",
       "name": "History",
+      "image": "history.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/history-2025/",
       "degrees": [
         "History BA",
         "History MA: Accelerated MA",
@@ -307,6 +317,8 @@
     {
       "id": "modern-languages-and-literatures",
       "name": "Modern Languages and Literatures",
+      "image": "modlang.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/languages-2025/",
       "degrees": [
         "French and Francophone Studies BA",
         "Latin American, Caribbean, and Latinx Studies BA",
@@ -343,6 +355,8 @@
     {
       "id": "philosophy",
       "name": "Philosophy",
+      "image": "philosophy.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/philosophy-2025/",
       "degrees": [
         "Humanities and Cultural Studies BA",
         "Philosophy BA",
@@ -381,6 +395,8 @@
     {
       "id": "writing-and-rhetoric",
       "name": "Writing and Rhetoric",
+      "image": "rhetoric.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/writing-rhetoric-2025/",
       "degrees": [
         "Writing and Rhetoric BA",
         "English MA: Rhetoric and Composition"
@@ -435,13 +451,29 @@
     {
       "id": "texts-and-technology",
       "name": "Texts and Technology",
-      "degrees": [],
-      "internalPartners": [],
-      "externalPartners": [],
+      "image": "texts.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/texts-tech-2025/",
+      "degrees": [
+        "Texts and Technology PhD",
+        "Digital Humanities in the Age of AI Certificate"
+      ],
+      "internalPartners": [
+        "Center for Humanities and Digital Research (CHDR)"
+      ],
+      "externalPartners": [
+        "Electronic Literature Organization"
+      ],
       "highlights": [
         {
+          "title": "Electronic Literature Organization Conference and Media Arts Festival",
+          "url": "https://stars.library.ucf.edu/elo2024/"
+        },{
           "title": "ELLE EndLess LEarner",
           "url": "https://chdr.cs.ucf.edu/elle/home"
+        },
+        {
+          "title": "Humanities in the Age of AI",
+          "url": "https://anastasiasalter.net/HumanitiesAI/"
         }
       ],
       "techCourses": [
@@ -457,7 +489,12 @@
     {
       "id": "themed-experience",
       "name": "Themed Experience",
-      "degrees": [],
+      "image": "te.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/themed-experience-2025/",
+      "degrees": [
+        "MS in Themed Experience",
+        "MFA in Themed Experience"
+      ],
       "internalPartners": [
         "CAVE",
         "College of Engineering"
@@ -487,7 +524,11 @@
     {
       "id": "womens-and-gender-studies",
       "name": "Women's and Gender Studies",
-      "degrees": [],
+      "image": "gender.jpg",
+      "spotlight": "https://cah.ucf.edu/spotlight/women-gender-2025/",
+      "degrees": [
+        "Gender Studies Certificate"
+      ],
       "internalPartners": [],
       "externalPartners": [],
       "highlights": [

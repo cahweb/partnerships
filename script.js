@@ -179,7 +179,76 @@ class TronCircuitboard {
             if (e.key === 'Escape' && this.isDetailView) {
                 this.exitDetailView();
             }
+            // ESC key to close popup
+            if (e.key === 'Escape') {
+                this.closePopup();
+            }
         });
+        
+        // Setup popup functionality
+        this.setupPopup();
+    }
+    
+    setupPopup() {
+        // Setup close button
+        const closeButton = document.getElementById('popupClose');
+        closeButton.addEventListener('click', () => {
+            this.closePopup();
+        });
+        
+        // Setup overlay click to close
+        const overlay = document.getElementById('popupOverlay');
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.closePopup();
+            }
+        });
+    }
+    
+    openPopup(title, url) {
+        const overlay = document.getElementById('popupOverlay');
+        const titleElement = document.getElementById('popupTitle');
+        const iframe = document.getElementById('popupIframe');
+        const fallback = document.getElementById('popupFallback');
+        const directLink = document.getElementById('popupDirectLink');
+        
+        // Set title and URL
+        titleElement.textContent = title;
+        iframe.src = url;
+        iframe.title = title;
+        directLink.href = url;
+        
+        // Reset fallback state
+        fallback.style.display = 'none';
+        iframe.style.display = 'block';
+        
+        // Setup iframe error handling
+        iframe.onerror = () => {
+            iframe.style.display = 'none';
+            fallback.style.display = 'block';
+        };
+        
+        // Show popup
+        overlay.classList.add('show');
+        
+        // Prevent body scrolling
+        document.body.style.overflow = 'hidden';
+    }
+    
+    closePopup() {
+        const overlay = document.getElementById('popupOverlay');
+        const iframe = document.getElementById('popupIframe');
+        
+        // Hide popup
+        overlay.classList.remove('show');
+        
+        // Clear iframe to stop loading
+        setTimeout(() => {
+            iframe.src = '';
+        }, 300);
+        
+        // Restore body scrolling
+        document.body.style.overflow = 'hidden'; // Keep as hidden since main page doesn't scroll
     }
     
     setupCanvas() {
@@ -825,6 +894,19 @@ class TronCircuitboard {
         const cardContent = document.getElementById('dataCardContent');
         cardContent.innerHTML = this.generateCardContent(department);
         
+        // Setup popup link event handlers
+        cardContent.addEventListener('click', (e) => {
+            const target = e.target.closest('.highlight-link, .featured-preview');
+            if (target) {
+                e.preventDefault();
+                const title = target.getAttribute('data-popup-title');
+                const url = target.getAttribute('data-popup-url');
+                if (title && url) {
+                    this.openPopup(title, url);
+                }
+            }
+        });
+        
         const dataCard = document.getElementById('dataCard');
         dataCard.classList.add('show');
     }
@@ -865,6 +947,11 @@ class TronCircuitboard {
         const centerX = canvasWidth / 2;
         const centerY = canvasHeight / 2;
         
+        // Define smaller margins to maximize usable space
+        const margin = 50; // Reduced from 80 to use more space
+        const usableWidth = canvasWidth - (margin * 2);
+        const usableHeight = canvasHeight - (margin * 2);
+        
         // Create central node
         this.vizNodes.push({
             id: department.id,
@@ -872,80 +959,129 @@ class TronCircuitboard {
             x: centerX,
             y: centerY,
             type: 'central',
-            radius: 20
+            radius: 25
         });
         
-        // Create partner nodes
-        const allPartners = [
-            ...department.internalPartners.map(p => ({ name: p, type: 'internal' })),
-            ...department.externalPartners.map(p => ({ name: p, type: 'external' }))
-        ];
+        // Use much more of the available space - maximize radii with percentages
+        const maxRadius = Math.min(usableWidth, usableHeight) / 2;
+        const degreeRadius = maxRadius * 0.3; // Start closer for degrees
+        const internalRadius = maxRadius * 0.65; // Significantly spread out
+        const externalRadius = maxRadius * 0.9; // Use almost full canvas
         
         // Process degrees to group by main program
         const processedDegrees = this.processDegreeHierarchy(department.degrees || []);
         
-        // Combine all peripheral nodes (partners + main degree programs)
-        const allPeripheralNodes = [...allPartners, ...processedDegrees.mainPrograms];
+        // Separate different types for individual placement
+        const degreeNodes = processedDegrees.mainPrograms;
+        const internalNodes = department.internalPartners.map(p => ({ name: p, type: 'internal' }));
+        const externalNodes = department.externalPartners.map(p => ({ name: p, type: 'external' }));
         
-        if (allPeripheralNodes.length > 0) {
-            const angleStep = (Math.PI * 2) / allPeripheralNodes.length;
-            const radius = Math.min(canvasWidth, canvasHeight) * 0.3;
-            
-            allPeripheralNodes.forEach((item, index) => {
-                const angle = index * angleStep;
-                const x = centerX + Math.cos(angle) * radius;
-                const y = centerY + Math.sin(angle) * radius;
+        // Place degree nodes with better distribution and more spacing
+        if (degreeNodes.length > 0) {
+            degreeNodes.forEach((degree, index) => {
+                // Ensure minimum angular separation between degrees
+                const minAngleSeparation = (Math.PI * 2) / Math.max(degreeNodes.length * 1.5, 4);
+                let angle = this.getDistributedAngle(index, degreeNodes.length, 0);
                 
-                const itemId = item.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                // Ensure no two degrees are too close angularly
+                if (index > 0) {
+                    const prevAngle = this.getDistributedAngle(index - 1, degreeNodes.length, 0);
+                    const angleDiff = Math.abs(angle - prevAngle);
+                    if (angleDiff < minAngleSeparation) {
+                        angle = prevAngle + minAngleSeparation;
+                    }
+                }
+                
+                angle = this.adjustAngleToAvoidTextLine(angle);
+                
+                const x = centerX + Math.cos(angle) * degreeRadius;
+                const y = centerY + Math.sin(angle) * degreeRadius;
+                
+                const itemId = degree.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
                 this.vizNodes.push({
                     id: itemId,
-                    name: item.name,
+                    name: degree.name,
                     x: x,
                     y: y,
-                    type: item.type,
-                    radius: item.type === 'degree' ? 10 : 12,
-                    isMainDegree: item.type === 'degree'
+                    type: 'degree',
+                    radius: 12,
+                    isMainDegree: true
                 });
                 
-                // Create link with type information
                 this.vizLinks.push({
                     source: department.id,
                     target: itemId,
-                    type: item.type,
+                    type: 'degree',
                     opacity: 0
                 });
                 
-                // Add sub-tracks for this degree if they exist
-                if (item.type === 'degree' && processedDegrees.tracks[item.name]) {
-                    const tracks = processedDegrees.tracks[item.name];
-                    const subRadius = 60; // Distance from main degree node
-                    const subAngleStep = (Math.PI * 2) / tracks.length;
-                    
-                    tracks.forEach((track, trackIndex) => {
-                        const subAngle = angle + (trackIndex * subAngleStep);
-                        const subX = x + Math.cos(subAngle) * subRadius;
-                        const subY = y + Math.sin(subAngle) * subRadius;
-                        
-                        const trackId = track.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-                        this.vizNodes.push({
-                            id: trackId,
-                            name: track,
-                            x: subX,
-                            y: subY,
-                            type: 'degree-track',
-                            radius: 6,
-                            parentId: itemId
-                        });
-                        
-                        // Create link from main degree to track
-                        this.vizLinks.push({
-                            source: itemId,
-                            target: trackId,
-                            type: 'degree-track',
-                            opacity: 0
-                        });
-                    });
+                // Place sub-tracks with intelligent positioning
+                if (processedDegrees.tracks[degree.name]) {
+                    const tracks = processedDegrees.tracks[degree.name];
+                    this.placeTracksAroundDegree(x, y, angle, tracks, itemId, centerX, centerY, margin);
                 }
+            });
+        }
+        
+        // Place internal partners with better spacing
+        if (internalNodes.length > 0) {
+            internalNodes.forEach((partner, index) => {
+                let angle = this.getDistributedAngle(index, internalNodes.length, Math.PI / 6); // Offset from degrees
+                angle = this.adjustAngleToAvoidTextLine(angle);
+                
+                const x = centerX + Math.cos(angle) * internalRadius;
+                const y = centerY + Math.sin(angle) * internalRadius;
+                
+                // Ensure within bounds
+                const boundedPos = this.ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin);
+                
+                const itemId = partner.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                this.vizNodes.push({
+                    id: itemId,
+                    name: partner.name,
+                    x: boundedPos.x,
+                    y: boundedPos.y,
+                    type: 'internal',
+                    radius: 14
+                });
+                
+                this.vizLinks.push({
+                    source: department.id,
+                    target: itemId,
+                    type: 'internal',
+                    opacity: 0
+                });
+            });
+        }
+        
+        // Place external partners with maximum utilization
+        if (externalNodes.length > 0) {
+            externalNodes.forEach((partner, index) => {
+                let angle = this.getDistributedAngle(index, externalNodes.length, Math.PI / 3); // Different offset
+                angle = this.adjustAngleToAvoidTextLine(angle);
+                
+                const x = centerX + Math.cos(angle) * externalRadius;
+                const y = centerY + Math.sin(angle) * externalRadius;
+                
+                // Ensure within bounds
+                const boundedPos = this.ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin);
+                
+                const itemId = partner.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                this.vizNodes.push({
+                    id: itemId,
+                    name: partner.name,
+                    x: boundedPos.x,
+                    y: boundedPos.y,
+                    type: 'external',
+                    radius: 16
+                });
+                
+                this.vizLinks.push({
+                    source: department.id,
+                    target: itemId,
+                    type: 'external',
+                    opacity: 0
+                });
             });
         }
         
@@ -953,6 +1089,115 @@ class TronCircuitboard {
         setTimeout(() => {
             this.animateVizLinks();
         }, 500);
+    }
+    
+    adjustAngleToAvoidTextLine(angle) {
+        // Normalize angle to 0-2π range
+        while (angle < 0) angle += Math.PI * 2;
+        while (angle >= Math.PI * 2) angle -= Math.PI * 2;
+        
+        // Define exclusion zone around horizontal line (±30 degrees from 0 and π)
+        const exclusionAngle = Math.PI / 6; // 30 degrees
+        
+        // Check if angle is near 0 (right side) or π (left side)
+        if (angle < exclusionAngle) {
+            // Too close to 0, move to exclusionAngle
+            angle = exclusionAngle;
+        } else if (angle > (Math.PI * 2 - exclusionAngle)) {
+            // Too close to 2π (same as 0), move to 2π - exclusionAngle
+            angle = Math.PI * 2 - exclusionAngle;
+        } else if (Math.abs(angle - Math.PI) < exclusionAngle) {
+            // Too close to π (left side)
+            if (angle < Math.PI) {
+                angle = Math.PI - exclusionAngle;
+            } else {
+                angle = Math.PI + exclusionAngle;
+            }
+        }
+        
+        return angle;
+    }
+    
+    getDistributedAngle(index, total, baseOffset = 0) {
+        // Create much more even distribution with larger gaps to prevent overlap
+        const baseAngle = (index / total) * Math.PI * 2 + baseOffset;
+        
+        // Add much more staggering to ensure no overlap
+        const stagger = (index % 5) * (Math.PI / 12); // 0, 15, 30, 45, 60 degrees variation
+        
+        // Additional spacing factor to spread things out more
+        const spacingFactor = 1.3; // Increase the effective angle spacing by 30%
+        
+        return (baseAngle * spacingFactor) + stagger;
+    }
+    
+    ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin) {
+        // Ensure nodes stay within the canvas bounds with proper margins
+        const clampedX = Math.max(margin, Math.min(x, canvasWidth - margin));
+        const clampedY = Math.max(margin, Math.min(y, canvasHeight - margin));
+        
+        return { x: clampedX, y: clampedY };
+    }
+    
+    placeTracksAroundDegree(degreeX, degreeY, degreeAngle, tracks, parentId, centerX, centerY, margin) {
+        const canvasWidth = this.vizCanvas.width;
+        const canvasHeight = this.vizCanvas.height;
+        const maxRadius = Math.min(canvasWidth, canvasHeight) / 2;
+        
+        // Use percentage-based distances to ensure proper scaling
+        const minTrackDistance = maxRadius * 0.15; // 15% of max radius minimum
+        const maxTrackDistance = maxRadius * 0.25; // 25% of max radius maximum
+        
+        tracks.forEach((track, trackIndex) => {
+            // Ensure each track gets a unique angle with no overlap
+            const baseAngle = degreeAngle + (trackIndex * (Math.PI * 2) / tracks.length);
+            const angleSpread = Math.PI / (tracks.length * 0.75); // More spacing between tracks
+            const finalAngle = baseAngle + (trackIndex - tracks.length/2) * angleSpread;
+            
+            // Use progressive distances to avoid clustering
+            const distanceFromDegree = minTrackDistance + (trackIndex * (maxTrackDistance - minTrackDistance) / Math.max(1, tracks.length - 1));
+            
+            let subX = degreeX + Math.cos(finalAngle) * distanceFromDegree;
+            let subY = degreeY + Math.sin(finalAngle) * distanceFromDegree;
+            
+            // Ensure within canvas bounds with proper margins
+            const bounded = this.ensureWithinBounds(subX, subY, canvasWidth, canvasHeight, margin);
+            
+            // Additional check: if too close to center, push further out
+            const distanceFromCenter = Math.sqrt(
+                Math.pow(bounded.x - centerX, 2) + Math.pow(bounded.y - centerY, 2)
+            );
+            
+            const minCenterDistance = maxRadius * 0.4; // Must be at least 40% from center
+            if (distanceFromCenter < minCenterDistance) {
+                const pushAngle = Math.atan2(bounded.y - centerY, bounded.x - centerX);
+                bounded.x = centerX + Math.cos(pushAngle) * minCenterDistance;
+                bounded.y = centerY + Math.sin(pushAngle) * minCenterDistance;
+                
+                // Re-apply bounds check
+                const finalBounded = this.ensureWithinBounds(bounded.x, bounded.y, canvasWidth, canvasHeight, margin);
+                bounded.x = finalBounded.x;
+                bounded.y = finalBounded.y;
+            }
+            
+            const trackId = track.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            this.vizNodes.push({
+                id: trackId,
+                name: track,
+                x: bounded.x,
+                y: bounded.y,
+                type: 'degree-track',
+                radius: 8,
+                parentId: parentId
+            });
+            
+            this.vizLinks.push({
+                source: parentId,
+                target: trackId,
+                type: 'degree-track',
+                opacity: 0
+            });
+        });
     }
     
     processDegreeHierarchy(degrees) {
@@ -1008,22 +1253,16 @@ class TronCircuitboard {
     generateCardContent(department) {
         let html = `<h2 class="card-title">${department.name}</h2>`;
         
-        // Featured Project (first highlight with iframe)
-        if (department.highlights.length > 0) {
-            const featuredProject = department.highlights[0];
+        // Spotlight Section (replaces featured project)
+        if (department.spotlight) {
             html += `
                 <div class="featured-project">
-                    <h3 class="featured-title">Featured: ${featuredProject.title}</h3>
-                    <iframe 
-                        src="${featuredProject.url}" 
-                        class="featured-iframe"
-                        title="${featuredProject.title}"
-                        loading="lazy"
-                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                        onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                    </iframe>
-                    <div class="iframe-fallback" style="display: none;">
-                        <p>Unable to load preview. <a href="${featuredProject.url}" target="_blank">Visit ${featuredProject.title} directly →</a></p>
+                    <h3 class="featured-title">Spotlight: ${department.name}</h3>
+                    <div class="featured-preview" data-popup-title="${department.name} Spotlight" data-popup-url="${department.spotlight}" ${department.image ? `style="background-image: url('${department.image}'); background-size: cover; background-position: center;"` : ''}>
+                        <div class="preview-overlay">
+                            ${!department.image ? '<div class="preview-icon">🔗</div>' : ''}
+                            <p class="preview-text">Click to view Spotlight</p>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1061,15 +1300,15 @@ class TronCircuitboard {
             `;
         }
         
-        // Additional Highlights/Projects (excluding the first one which is featured)
-        if (department.highlights.length > 1) {
+        // All Highlights/Projects 
+        if (department.highlights.length > 0) {
             html += `
                 <div class="card-section">
-                    <h3 class="section-title">Additional Projects</h3>
+                    <h3 class="section-title">Projects & Highlights</h3>
                     <div class="section-content">
                         <ul class="section-list">
-                            ${department.highlights.slice(1).map(highlight => 
-                                `<li><a href="${highlight.url}" target="_blank" class="highlight-link">${highlight.title}</a></li>`
+                            ${department.highlights.map(highlight => 
+                                `<li><a href="#" class="highlight-link" data-popup-title="${highlight.title}" data-popup-url="${highlight.url}">${highlight.title}</a></li>`
                             ).join('')}
                         </ul>
                     </div>
@@ -1097,8 +1336,8 @@ class TronCircuitboard {
     animate() {
         this.animationTime += 0.05; // Increment time for animations
         
-        // Main canvas animation
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        // Main canvas animation - use more transparent overlay to show grid
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Draw and update lines
@@ -1197,28 +1436,52 @@ class TronCircuitboard {
         this.vizCtx.save();
         this.vizCtx.globalAlpha = opacity;
         
-        // Add pulsing effect to line width and glow
-        const pulseWidth = 2 + Math.sin(this.animationTime * 3) * 0.5;
-        const pulseGlow = 10 + Math.sin(this.animationTime * 2) * 5;
+        // Set different line characteristics based on type
+        let pulseWidth, pulseGlow, strokeColor, shadowColor;
         
-        // Set color based on link type
-        if (linkType === 'internal') {
-            this.vizCtx.strokeStyle = '#ffff00'; // Yellow for internal
-            this.vizCtx.shadowColor = '#ffff00';
-        } else if (linkType === 'external') {
-            this.vizCtx.strokeStyle = '#ff00ff'; // Pink/Magenta for external
-            this.vizCtx.shadowColor = '#ff00ff';
-        } else if (linkType === 'degree') {
-            this.vizCtx.strokeStyle = '#00ff00'; // Green for degrees
-            this.vizCtx.shadowColor = '#00ff00';
+        if (linkType === 'degree') {
+            // Shortest, thinnest lines for degrees - mixed cool colors
+            pulseWidth = 1.5 + Math.sin(this.animationTime * 4) * 0.3;
+            pulseGlow = 6 + Math.sin(this.animationTime * 3) * 3;
+            // Mix of cool colors for degrees
+            const degreeColors = ['#00ffff', '#0080ff', '#8000ff', '#ff00c0'];
+            const colorIndex = Math.abs(source.x + target.x) % degreeColors.length;
+            strokeColor = degreeColors[Math.floor(colorIndex)];
+            shadowColor = strokeColor;
         } else if (linkType === 'degree-track') {
-            this.vizCtx.strokeStyle = '#90ff90'; // Light green for degree tracks
-            this.vizCtx.shadowColor = '#90ff90';
+            // Very thin lines for degree tracks - lighter versions
+            pulseWidth = 1 + Math.sin(this.animationTime * 5) * 0.2;
+            pulseGlow = 4 + Math.sin(this.animationTime * 4) * 2;
+            strokeColor = '#80c0ff'; // Light blue for tracks
+            shadowColor = strokeColor;
+        } else if (linkType === 'internal') {
+            // Medium thickness for internal - warm colors
+            pulseWidth = 2.5 + Math.sin(this.animationTime * 3) * 0.5;
+            pulseGlow = 12 + Math.sin(this.animationTime * 2) * 6;
+            // Mix of warm colors for internal
+            const internalColors = ['#ffff00', '#ff8000', '#ff0040', '#c0ff00'];
+            const colorIndex = Math.abs(source.y + target.y) % internalColors.length;
+            strokeColor = internalColors[Math.floor(colorIndex)];
+            shadowColor = strokeColor;
+        } else if (linkType === 'external') {
+            // Thickest lines for external - vibrant mixed colors
+            pulseWidth = 3 + Math.sin(this.animationTime * 2) * 0.8;
+            pulseGlow = 18 + Math.sin(this.animationTime * 1.5) * 8;
+            // Mix of vibrant colors for external
+            const externalColors = ['#ff00ff', '#00ff40', '#ff4000', '#4000ff', '#ff8040'];
+            const colorIndex = Math.abs(source.x * source.y + target.x * target.y) % externalColors.length;
+            strokeColor = externalColors[Math.floor(colorIndex)];
+            shadowColor = strokeColor;
         } else {
-            this.vizCtx.strokeStyle = '#00ffff'; // Default cyan
-            this.vizCtx.shadowColor = '#00ffff';
+            // Default
+            pulseWidth = 2;
+            pulseGlow = 10;
+            strokeColor = '#00ffff';
+            shadowColor = strokeColor;
         }
         
+        this.vizCtx.strokeStyle = strokeColor;
+        this.vizCtx.shadowColor = shadowColor;
         this.vizCtx.lineWidth = pulseWidth;
         this.vizCtx.shadowBlur = pulseGlow;
         
@@ -1236,40 +1499,53 @@ class TronCircuitboard {
         // Add pulsing effect based on animation time
         const pulseIntensity = 0.8 + 0.2 * Math.sin(this.animationTime * 2);
         let shadowBlur = 10;
+        let fillColor, shadowColor;
         
         if (node.type === 'central') {
-            this.vizCtx.fillStyle = '#ff6600';
-            this.vizCtx.shadowColor = '#ff6600';
-            shadowBlur = 20 + 10 * Math.sin(this.animationTime * 1.5);
-        } else if (node.type === 'internal') {
-            this.vizCtx.fillStyle = '#ffff00'; // Yellow for internal partners
-            this.vizCtx.shadowColor = '#ffff00';
-            shadowBlur = 10 + 5 * Math.sin(this.animationTime * 2);
-        } else if (node.type === 'external') {
-            this.vizCtx.fillStyle = '#ff00ff'; // Pink/Magenta for external partners
-            this.vizCtx.shadowColor = '#ff00ff';
-            shadowBlur = 10 + 5 * Math.sin(this.animationTime * 2);
+            fillColor = '#ff6600';
+            shadowColor = '#ff6600';
+            shadowBlur = 25 + 12 * Math.sin(this.animationTime * 1.5);
         } else if (node.type === 'degree') {
-            this.vizCtx.fillStyle = '#00ff00'; // Green for degrees
-            this.vizCtx.shadowColor = '#00ff00';
+            // Mixed cool colors for degrees - smaller nodes
+            const degreeColors = ['#00ffff', '#0080ff', '#8000ff', '#ff00c0'];
+            const colorIndex = Math.abs(node.x + node.y) % degreeColors.length;
+            fillColor = degreeColors[Math.floor(colorIndex)];
+            shadowColor = fillColor;
             shadowBlur = 8 + 4 * Math.sin(this.animationTime * 2.5);
         } else if (node.type === 'degree-track') {
-            this.vizCtx.fillStyle = '#90ff90'; // Light green for degree tracks
-            this.vizCtx.shadowColor = '#90ff90';
+            // Light blue for degree tracks - smallest nodes
+            fillColor = '#80c0ff';
+            shadowColor = '#80c0ff';
             shadowBlur = 6 + 3 * Math.sin(this.animationTime * 3);
+        } else if (node.type === 'internal') {
+            // Mixed warm colors for internal partners - medium nodes
+            const internalColors = ['#ffff00', '#ff8000', '#ff0040', '#c0ff00'];
+            const colorIndex = Math.abs(node.y * 2 + node.x) % internalColors.length;
+            fillColor = internalColors[Math.floor(colorIndex)];
+            shadowColor = fillColor;
+            shadowBlur = 12 + 6 * Math.sin(this.animationTime * 2);
+        } else if (node.type === 'external') {
+            // Mixed vibrant colors for external partners - largest nodes
+            const externalColors = ['#ff00ff', '#00ff40', '#ff4000', '#4000ff', '#ff8040'];
+            const colorIndex = Math.abs(node.x * node.y) % externalColors.length;
+            fillColor = externalColors[Math.floor(colorIndex)];
+            shadowColor = fillColor;
+            shadowBlur = 15 + 8 * Math.sin(this.animationTime * 1.8);
         } else {
-            this.vizCtx.fillStyle = '#00ffff';
-            this.vizCtx.shadowColor = '#00ffff';
+            fillColor = '#00ffff';
+            shadowColor = '#00ffff';
             shadowBlur = 10;
         }
         
+        this.vizCtx.fillStyle = fillColor;
+        this.vizCtx.shadowColor = shadowColor;
         this.vizCtx.shadowBlur = shadowBlur * pulseIntensity;
         this.vizCtx.strokeStyle = '#ffffff';
         this.vizCtx.lineWidth = node.type === 'central' ? 3 : 2;
         
         // Add slight size pulsing for central node
         const radius = node.type === 'central' ? 
-            node.radius + 3 * Math.sin(this.animationTime) : 
+            node.radius + 4 * Math.sin(this.animationTime) : 
             node.radius;
         
         this.vizCtx.beginPath();
@@ -1283,10 +1559,10 @@ class TronCircuitboard {
     drawVizLabel(node) {
         this.vizCtx.save();
         
-        // Set label color based on node type
+        // Set label color and styling based on node type
         if (node.type === 'central') {
             // Central department name with blue outline (TRON style)
-            this.vizCtx.font = 'bold 20px Orbitron';
+            this.vizCtx.font = 'bold 22px Orbitron';
             this.vizCtx.textAlign = 'center';
             this.vizCtx.textBaseline = 'middle';
             
@@ -1302,16 +1578,16 @@ class TronCircuitboard {
             this.vizCtx.shadowBlur = 0;
             this.vizCtx.fillText(node.name, node.x, node.y);
         } else if (node.type === 'degree') {
-            // Degree nodes with green tint and smaller font
-            this.vizCtx.fillStyle = '#90ff90';  // Light green for better readability
-            this.vizCtx.font = 'bold 14px Orbitron';  // Slightly smaller than partners
+            // Degree nodes with WHITE font for better readability
+            this.vizCtx.fillStyle = '#ffffff';  // White font for degrees
+            this.vizCtx.font = 'bold 13px Orbitron';  // Slightly smaller to fit better
             this.vizCtx.shadowColor = '#000000';
-            this.vizCtx.shadowBlur = 3;
+            this.vizCtx.shadowBlur = 4;
             this.vizCtx.textAlign = 'center';
             this.vizCtx.textBaseline = 'middle';
             
-            // Wrap long text
-            const maxWidth = 120;  
+            // Wrap long text with better width management
+            const maxWidth = 110;  
             const words = node.name.split(' ');
             let line = '';
             let lines = [];
@@ -1330,58 +1606,59 @@ class TronCircuitboard {
             }
             lines.push(line);
             
-            const lineHeight = 16;
-            const startY = node.y + node.radius + 20 - (lines.length - 1) * lineHeight / 2;
+            const lineHeight = 15;
+            // Edge-aware text positioning
+            const canvasWidth = this.vizCanvas.width;
+            const canvasHeight = this.vizCanvas.height;
+            const margin = 60;
+            
+            let textX = node.x;
+            let textY = node.y;
+            
+            // Adjust for canvas edges
+            if (node.x < margin) {
+                textX = node.x + node.radius + 60;
+                this.vizCtx.textAlign = 'left';
+            } else if (node.x > canvasWidth - margin) {
+                textX = node.x - node.radius - 60;
+                this.vizCtx.textAlign = 'right';
+            }
+            
+            if (node.y < margin) {
+                textY = node.y + node.radius + 30;
+            } else if (node.y > canvasHeight - margin) {
+                textY = node.y - node.radius - 20;
+            } else {
+                // Standard positioning with some variation
+                const centerX = canvasWidth / 2;
+                const centerY = canvasHeight / 2;
+                const angle = Math.atan2(node.y - centerY, node.x - centerX);
+                
+                if (angle > Math.PI/3 && angle < 2*Math.PI/3) {
+                    textY = node.y + node.radius + 35;
+                } else if (angle < -Math.PI/3 && angle > -2*Math.PI/3) {
+                    textY = node.y - node.radius - 25;
+                } else {
+                    textY = node.y + node.radius + 30;
+                }
+            }
+            
+            const startY = textY - (lines.length - 1) * lineHeight / 2;
             
             lines.forEach((line, index) => {
-                this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
+                this.vizCtx.fillText(line.trim(), textX, startY + index * lineHeight);
             });
         } else if (node.type === 'degree-track') {
-            // Degree track nodes with smaller light green font
-            this.vizCtx.fillStyle = '#b0ffb0';  // Very light green for better readability
-            this.vizCtx.font = '12px Orbitron';  // Smaller than main degrees
-            this.vizCtx.shadowColor = '#000000';
-            this.vizCtx.shadowBlur = 2;
-            this.vizCtx.textAlign = 'center';
-            this.vizCtx.textBaseline = 'middle';
-            
-            // Wrap long text
-            const maxWidth = 100;  
-            const words = node.name.split(' ');
-            let line = '';
-            let lines = [];
-            
-            for (let i = 0; i < words.length; i++) {
-                const testLine = line + words[i] + ' ';
-                const metrics = this.vizCtx.measureText(testLine);
-                const testWidth = metrics.width;
-                
-                if (testWidth > maxWidth && i > 0) {
-                    lines.push(line);
-                    line = words[i] + ' ';
-                } else {
-                    line = testLine;
-                }
-            }
-            lines.push(line);
-            
-            const lineHeight = 14;
-            const startY = node.y + node.radius + 15 - (lines.length - 1) * lineHeight / 2;
-            
-            lines.forEach((line, index) => {
-                this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
-            });
-        } else {
-            // Partner nodes with larger white font
-            this.vizCtx.fillStyle = '#ffffff';
-            this.vizCtx.font = 'bold 16px Orbitron';  // Increased from 12px
+            // Degree track nodes with white font (smaller)
+            this.vizCtx.fillStyle = '#ffffff';  // White font for degree tracks too
+            this.vizCtx.font = '9px Orbitron';  // Even smaller font to reduce overlap
             this.vizCtx.shadowColor = '#000000';
             this.vizCtx.shadowBlur = 3;
             this.vizCtx.textAlign = 'center';
             this.vizCtx.textBaseline = 'middle';
             
-            // Wrap long text
-            const maxWidth = 140;  // Increased to accommodate larger font
+            // Wrap long text with smaller width to reduce overlap
+            const maxWidth = 70;  // Further reduced
             const words = node.name.split(' ');
             let line = '';
             let lines = [];
@@ -1400,8 +1677,109 @@ class TronCircuitboard {
             }
             lines.push(line);
             
-            const lineHeight = 18;  // Increased line height for better readability
-            const startY = node.y + node.radius + 25 - (lines.length - 1) * lineHeight / 2;
+            const lineHeight = 11; // Reduced line height for track text
+            // Smart text positioning to avoid canvas edges and overlap
+            const canvasWidth = this.vizCanvas.width;
+            const canvasHeight = this.vizCanvas.height;
+            const margin = 40;
+            
+            // Calculate optimal text position
+            let textX = node.x;
+            let textY = node.y;
+            
+            // Check if near edges and adjust accordingly
+            if (node.x < margin * 2) {
+                // Near left edge - place text to the right
+                textX = node.x + node.radius + 50;
+                this.vizCtx.textAlign = 'left';
+            } else if (node.x > canvasWidth - margin * 2) {
+                // Near right edge - place text to the left
+                textX = node.x - node.radius - 50;
+                this.vizCtx.textAlign = 'right';
+            }
+            
+            if (node.y < margin * 2) {
+                // Near top edge - place text below
+                textY = node.y + node.radius + 25;
+            } else if (node.y > canvasHeight - margin * 2) {
+                // Near bottom edge - place text above
+                textY = node.y - node.radius - 15;
+            } else {
+                // Default positioning with staggering
+                textY = node.y + node.radius + 20;
+            }
+            
+            const startY = textY - (lines.length - 1) * lineHeight / 2;
+            
+            lines.forEach((line, index) => {
+                this.vizCtx.fillText(line.trim(), textX, startY + index * lineHeight);
+            });
+        } else if (node.type === 'internal') {
+            // Internal partner nodes with larger colorful font
+            this.vizCtx.fillStyle = '#ffff80';  // Light yellow for internal
+            this.vizCtx.font = 'bold 16px Orbitron';
+            this.vizCtx.shadowColor = '#000000';
+            this.vizCtx.shadowBlur = 4;
+            this.vizCtx.textAlign = 'center';
+            this.vizCtx.textBaseline = 'middle';
+            
+            // Wrap long text
+            const maxWidth = 150;
+            const words = node.name.split(' ');
+            let line = '';
+            let lines = [];
+            
+            for (let i = 0; i < words.length; i++) {
+                const testLine = line + words[i] + ' ';
+                const metrics = this.vizCtx.measureText(testLine);
+                const testWidth = metrics.width;
+                
+                if (testWidth > maxWidth && i > 0) {
+                    lines.push(line);
+                    line = words[i] + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            lines.push(line);
+            
+            const lineHeight = 18;
+            const startY = node.y + node.radius + 28 - (lines.length - 1) * lineHeight / 2;
+            
+            lines.forEach((line, index) => {
+                this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
+            });
+        } else if (node.type === 'external') {
+            // External partner nodes with largest colorful font
+            this.vizCtx.fillStyle = '#ff80ff';  // Light magenta for external
+            this.vizCtx.font = 'bold 17px Orbitron';
+            this.vizCtx.shadowColor = '#000000';
+            this.vizCtx.shadowBlur = 4;
+            this.vizCtx.textAlign = 'center';
+            this.vizCtx.textBaseline = 'middle';
+            
+            // Wrap long text
+            const maxWidth = 160;
+            const words = node.name.split(' ');
+            let line = '';
+            let lines = [];
+            
+            for (let i = 0; i < words.length; i++) {
+                const testLine = line + words[i] + ' ';
+                const metrics = this.vizCtx.measureText(testLine);
+                const testWidth = metrics.width;
+                
+                if (testWidth > maxWidth && i > 0) {
+                    lines.push(line);
+                    line = words[i] + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            lines.push(line);
+            
+            const lineHeight = 19;
+            const startY = node.y + node.radius + 30 - (lines.length - 1) * lineHeight / 2;
             
             lines.forEach((line, index) => {
                 this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
