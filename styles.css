@@ -589,6 +589,38 @@ body, html {
     font-size: 0.8rem;
 }
 
+/* Special styling for degrees list */
+.degrees-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.degree-item {
+    background: rgba(0, 255, 255, 0.1);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 0;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.degree-item:hover {
+    background: rgba(0, 255, 255, 0.2);
+    border-color: #00ffff;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
+
+.degree-item::before {
+    content: '🎓';
+    margin-right: 8px;
+    opacity: 0.7;
+}
+
 .highlight-link {
     color: #00ffff;
     text-decoration: none;

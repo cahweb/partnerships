@@ -53,7 +53,7 @@ class TronCircuitboard {
     
     async loadDepartmentData() {
         try {
-            const response = await fetch('data.json');
+            const response = await fetch('new_data.json');
             this.departmentData = await response.json();
             console.log('Department data loaded successfully');
         } catch (error) {
@@ -665,6 +665,22 @@ class TronCircuitboard {
     
     generateCardContent(department) {
         let html = `<h2 class="card-title">${department.name}</h2>`;
+        
+        // Degrees Offered
+        if (department.degrees && department.degrees.length > 0) {
+            html += `
+                <div class="card-section">
+                    <h3 class="section-title">Degrees Offered</h3>
+                    <div class="section-content">
+                        <ul class="degrees-list">
+                            ${department.degrees.map(degree => 
+                                `<li class="degree-item">${degree}</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
         
         // Featured Project (first highlight with iframe)
         if (department.highlights.length > 0) {
