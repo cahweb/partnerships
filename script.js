@@ -1023,11 +1023,6 @@ class TronCircuitboard {
         const centerX = canvasWidth / 2;
         const centerY = canvasHeight / 2;
         
-        // Define smaller margins to maximize usable space
-        const margin = 50; // Reduced from 80 to use more space
-        const usableWidth = canvasWidth - (margin * 2);
-        const usableHeight = canvasHeight - (margin * 2);
-        
         // Create central node
         this.vizNodes.push({
             id: department.id,
@@ -1038,369 +1033,535 @@ class TronCircuitboard {
             radius: 25
         });
         
-        // Use much more of the available space - with varied radii for visual interest
-        const maxRadius = Math.min(usableWidth, usableHeight) / 2;
-        const degreeRadiusMin = maxRadius * 0.25; // Minimum for degrees
-        const degreeRadiusMax = maxRadius * 0.45; // Maximum for degrees
-        const internalRadiusMin = maxRadius * 0.5; // Minimum for internal
-        const internalRadiusMax = maxRadius * 0.7; // Maximum for internal
-        const externalRadiusMin = maxRadius * 0.75; // Minimum for external
-        const externalRadiusMax = maxRadius * 0.95; // Maximum for external
-        
-        // Process degrees to group by main program
+        // Process degrees
         const processedDegrees = this.processDegreeHierarchy(department.degrees || []);
         
-        // Separate different types for individual placement
-        const degreeNodes = processedDegrees.mainPrograms;
-        const internalNodes = department.internalPartners.map(p => ({ name: p, type: 'internal' }));
-        const externalNodes = department.externalPartners.map(p => ({ name: p, type: 'external' }));
+        // Collect all nodes to place
+        const nodesToPlace = [];
         
-        // Place degree nodes with advanced collision detection and optimal positioning
-        if (degreeNodes.length > 0) {
-            // Track all placed degree positions
-            const placedDegreeNodes = [];
-            
-            degreeNodes.forEach((degree, index) => {
-                let attempts = 0;
-                let bestPosition = null;
-                let bestScore = -1;
-                
-                // Try many positions to find the optimal one
-                while (attempts < 150) {
-                    // Try different angular positions with wide spacing
-                    const baseAngle = (index * (Math.PI * 2) / degreeNodes.length);
-                    const randomOffset = (Math.random() - 0.5) * Math.PI; // Large random variation
-                    let angle = baseAngle + randomOffset;
-                    
-                    // Use varied radius for visual interest
-                    const radiusRange = degreeRadiusMax - degreeRadiusMin;
-                    const testRadius = degreeRadiusMin + (Math.random() * radiusRange);
-                    
-                    angle = this.adjustAngleToAvoidTextLine(angle);
-                    
-                    const x = centerX + Math.cos(angle) * testRadius;
-                    const y = centerY + Math.sin(angle) * testRadius;
-                    
-                    // Calculate position score (higher is better)
-                    let positionScore = 0;
-                    let hasCollision = false;
-                    
-                    const degreeTextWidth = this.estimateTextWidth(degree.name);
-                    
-                    // Check for text collisions with all existing degree nodes
-                    for (const existing of placedDegreeNodes) {
-                        const dx = Math.abs(x - existing.x);
-                        const dy = Math.abs(y - existing.y);
-                        
-                        // Much more aggressive separation for degree text with larger fonts
-                        const requiredSeparationX = (degreeTextWidth + existing.textWidth) / 2 + 150; // Much larger buffer
-                        const requiredSeparationY = 180;  // Much larger vertical separation
-                        
-                        if (dx < requiredSeparationX && dy < requiredSeparationY) {
-                            hasCollision = true;
-                            break;
-                        } else {
-                            // Reward positions that are far from other nodes
-                            const totalDistance = Math.sqrt(dx * dx + dy * dy);
-                            positionScore += totalDistance;
-                        }
-                    }
-                    
-                    // Check angular separation from other degrees
-                    const minAngleSeparation = (Math.PI * 2) / Math.max(degreeNodes.length * 1.5, 4); // Increased separation
-                    for (const existing of placedDegreeNodes) {
-                        const existingAngle = existing.angle;
-                        const angleDiff = Math.abs(angle - existingAngle);
-                        const normalizedDiff = Math.min(angleDiff, (Math.PI * 2) - angleDiff);
-                        if (normalizedDiff < minAngleSeparation) {
-                            hasCollision = true;
-                            break;
-                        } else {
-                            // Reward good angular separation
-                            positionScore += normalizedDiff * 100;
-                        }
-                    }
-                    
-                    // Check canvas bounds with very generous margins for larger fonts
-                    const boundaryMargin = Math.max(degreeTextWidth / 2 + 80, 150); // Much larger margin
-                    if (x < boundaryMargin || x > canvasWidth - boundaryMargin ||
-                        y < 150 || y > canvasHeight - 150) { // Much larger vertical margins
-                        hasCollision = true;
-                    }
-                    
-                    // If no collision and better score, save this position
-                    if (!hasCollision && positionScore > bestScore) {
-                        bestScore = positionScore;
-                        bestPosition = { x: x, y: y, angle: angle, textWidth: degreeTextWidth };
-                    }
-                    
-                    attempts++;
-                }
-                
-                // Use best position found, or fallback
-                let finalX, finalY, finalAngle;
-                if (bestPosition) {
-                    finalX = bestPosition.x;
-                    finalY = bestPosition.y;
-                    finalAngle = bestPosition.angle;
-                } else {
-                    // Fallback: force maximum angular separation with varied radius
-                    finalAngle = index * (Math.PI * 2) / degreeNodes.length;
-                    finalAngle = this.adjustAngleToAvoidTextLine(finalAngle);
-                    const fallbackRadius = degreeRadiusMin + (Math.random() * (degreeRadiusMax - degreeRadiusMin));
-                    finalX = centerX + Math.cos(finalAngle) * fallbackRadius;
-                    finalY = centerY + Math.sin(finalAngle) * fallbackRadius;
-                }
-                
-                // Record this position for future collision checks
-                placedDegreeNodes.push({ 
-                    x: finalX, 
-                    y: finalY, 
-                    angle: finalAngle,
-                    textWidth: this.estimateTextWidth(degree.name)
-                });
-                
-                const itemId = degree.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-                this.vizNodes.push({
-                    id: itemId,
-                    name: degree.name,
-                    x: finalX,
-                    y: finalY,
-                    type: 'degree',
-                    radius: 12,
-                    isMainDegree: true
-                });
-                
+        // Add degree nodes
+        processedDegrees.mainPrograms.forEach(degree => {
+            const itemId = degree.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            nodesToPlace.push({
+                id: itemId,
+                name: degree.name,
+                type: 'degree',
+                radius: 12,
+                tracks: processedDegrees.tracks[degree.name] || []
+            });
+        });
+        
+        // Add internal partners
+        (department.internalPartners || []).forEach(partner => {
+            const itemId = partner.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            nodesToPlace.push({
+                id: itemId,
+                name: partner,
+                type: 'internal',
+                radius: 14
+            });
+        });
+        
+        // Add external partners
+        (department.externalPartners || []).forEach(partner => {
+            const itemId = partner.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            nodesToPlace.push({
+                id: itemId,
+                name: partner,
+                type: 'external',
+                radius: 10
+            });
+        });
+        
+        // Use genetic algorithm approach to find best arrangement
+        this.findOptimalLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY);
+        
+        // Create links
+        this.vizNodes.forEach(node => {
+            if (node.type !== 'central') {
                 this.vizLinks.push({
                     source: department.id,
-                    target: itemId,
-                    type: 'degree',
+                    target: node.id,
+                    type: node.type,
                     opacity: 0
                 });
-                
-                // Store track data with the degree node for hover functionality
-                if (processedDegrees.tracks[degree.name]) {
-                    const storedNode = this.vizNodes.find(n => n.id === itemId);
-                    if (storedNode) {
-                        storedNode.tracks = processedDegrees.tracks[degree.name];
-                        storedNode.parentX = finalX;
-                        storedNode.parentY = finalY;
-                        storedNode.parentAngle = finalAngle;
-                    }
-                }
-            });
-        }
-        
-        // Place internal partners with advanced collision detection
-        if (internalNodes.length > 0) {
-            const placedInternalNodes = [];
-            
-            internalNodes.forEach((partner, index) => {
-                let attempts = 0;
-                let bestPosition = null;
-                let bestScore = -1;
-                
-                while (attempts < 100) {
-                    let angle = this.getDistributedAngle(index, internalNodes.length, Math.PI / 6);
-                    const randomOffset = (Math.random() - 0.5) * (Math.PI / 2);
-                    angle += randomOffset;
-                    angle = this.adjustAngleToAvoidTextLine(angle);
-                    
-                    // Use varied radius for internal partners
-                    const radiusRange = internalRadiusMax - internalRadiusMin;
-                    const testRadius = internalRadiusMin + (Math.random() * radiusRange);
-                    
-                    const x = centerX + Math.cos(angle) * testRadius;
-                    const y = centerY + Math.sin(angle) * testRadius;
-                    
-                    // Calculate position score
-                    let positionScore = 0;
-                    let hasCollision = false;
-                    
-                    const partnerTextWidth = this.estimateTextWidth(partner.name);
-                    
-                    // Check for collisions with existing nodes (including degrees and other partners)
-                    const allExistingNodes = [...this.vizNodes, ...placedInternalNodes];
-                    for (const existing of allExistingNodes) {
-                        const dx = Math.abs(x - existing.x);
-                        const dy = Math.abs(y - existing.y);
-                        
-                        const existingTextWidth = existing.textWidth || this.estimateTextWidth(existing.name || '');
-                        const requiredSeparationX = (partnerTextWidth + existingTextWidth) / 2 + 120; // Much larger buffer
-                        const requiredSeparationY = 130; // Much larger vertical separation
-                        
-                        if (dx < requiredSeparationX && dy < requiredSeparationY) {
-                            hasCollision = true;
-                            break;
-                        } else {
-                            const distance = Math.sqrt(dx * dx + dy * dy);
-                            positionScore += distance;
-                        }
-                    }
-                    
-                    // Check canvas bounds with larger margins for bigger fonts
-                    const boundaryMargin = Math.max(partnerTextWidth / 2 + 60, 120); // Much larger margin
-                    if (x < boundaryMargin || x > canvasWidth - boundaryMargin ||
-                        y < 120 || y > canvasHeight - 120) { // Much larger vertical margins
-                        hasCollision = true;
-                    }
-                    
-                    if (!hasCollision && positionScore > bestScore) {
-                        bestScore = positionScore;
-                        bestPosition = { x: x, y: y, textWidth: partnerTextWidth };
-                    }
-                    
-                    attempts++;
-                }
-                
-                let finalX, finalY;
-                if (bestPosition) {
-                    finalX = bestPosition.x;
-                    finalY = bestPosition.y;
-                } else {
-                    // Fallback positioning with varied radius
-                    const angle = index * (Math.PI * 2) / internalNodes.length + Math.PI / 6;
-                    const adjustedAngle = this.adjustAngleToAvoidTextLine(angle);
-                    const fallbackRadius = internalRadiusMin + (Math.random() * (internalRadiusMax - internalRadiusMin));
-                    finalX = centerX + Math.cos(adjustedAngle) * fallbackRadius;
-                    finalY = centerY + Math.sin(adjustedAngle) * fallbackRadius;
-                }
-                
-                // Ensure within bounds
-                const boundedPos = this.ensureWithinBounds(finalX, finalY, canvasWidth, canvasHeight, margin);
-                placedInternalNodes.push({ 
-                    x: boundedPos.x, 
-                    y: boundedPos.y, 
-                    name: partner.name,
-                    textWidth: this.estimateTextWidth(partner.name)
-                });
-                
-                const itemId = partner.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-                this.vizNodes.push({
-                    id: itemId,
-                    name: partner.name,
-                    x: boundedPos.x,
-                    y: boundedPos.y,
-                    type: 'internal',
-                    radius: 14
-                });
-                
-                this.vizLinks.push({
-                    source: department.id,
-                    target: itemId,
-                    type: 'internal',
-                    opacity: 0
-                });
-            });
-        }
-        
-        // Place external partners with advanced collision detection
-        if (externalNodes.length > 0) {
-            const placedExternalNodes = [];
-            
-            externalNodes.forEach((partner, index) => {
-                let attempts = 0;
-                let bestPosition = null;
-                let bestScore = -1;
-                
-                while (attempts < 100) {
-                    let angle = this.getDistributedAngle(index, externalNodes.length, Math.PI / 3);
-                    const randomOffset = (Math.random() - 0.5) * (Math.PI / 2);
-                    angle += randomOffset;
-                    angle = this.adjustAngleToAvoidTextLine(angle);
-                    
-                    // Use varied radius for external partners
-                    const radiusRange = externalRadiusMax - externalRadiusMin;
-                    const testRadius = externalRadiusMin + (Math.random() * radiusRange);
-                    
-                    const x = centerX + Math.cos(angle) * testRadius;
-                    const y = centerY + Math.sin(angle) * testRadius;
-                    
-                    // Calculate position score
-                    let positionScore = 0;
-                    let hasCollision = false;
-                    
-                    const partnerTextWidth = this.estimateTextWidth(partner.name);
-                    
-                    // Check for collisions with ALL existing nodes
-                    const allExistingNodes = [...this.vizNodes, ...placedExternalNodes];
-                    for (const existing of allExistingNodes) {
-                        const dx = Math.abs(x - existing.x);
-                        const dy = Math.abs(y - existing.y);
-                        
-                        const existingTextWidth = existing.textWidth || this.estimateTextWidth(existing.name || '');
-                        const requiredSeparationX = (partnerTextWidth + existingTextWidth) / 2 + 130; // Much larger buffer for external
-                        const requiredSeparationY = 140; // Much larger vertical buffer
-                        
-                        if (dx < requiredSeparationX && dy < requiredSeparationY) {
-                            hasCollision = true;
-                            break;
-                        } else {
-                            const distance = Math.sqrt(dx * dx + dy * dy);
-                            positionScore += distance;
-                        }
-                    }
-                    
-                    // Check canvas bounds with larger margins for bigger fonts
-                    const boundaryMargin = Math.max(partnerTextWidth / 2 + 70, 130); // Much larger margin
-                    if (x < boundaryMargin || x > canvasWidth - boundaryMargin ||
-                        y < 130 || y > canvasHeight - 130) { // Much larger vertical margins
-                        hasCollision = true;
-                    }
-                    
-                    if (!hasCollision && positionScore > bestScore) {
-                        bestScore = positionScore;
-                        bestPosition = { x: x, y: y, textWidth: partnerTextWidth };
-                    }
-                    
-                    attempts++;
-                }
-                
-                let finalX, finalY;
-                if (bestPosition) {
-                    finalX = bestPosition.x;
-                    finalY = bestPosition.y;
-                } else {
-                    // Fallback positioning with varied radius
-                    const angle = index * (Math.PI * 2) / externalNodes.length + Math.PI / 3;
-                    const adjustedAngle = this.adjustAngleToAvoidTextLine(angle);
-                    const fallbackRadius = externalRadiusMin + (Math.random() * (externalRadiusMax - externalRadiusMin));
-                    finalX = centerX + Math.cos(adjustedAngle) * fallbackRadius;
-                    finalY = centerY + Math.sin(adjustedAngle) * fallbackRadius;
-                }
-                
-                // Ensure within bounds
-                const boundedPos = this.ensureWithinBounds(finalX, finalY, canvasWidth, canvasHeight, margin);
-                placedExternalNodes.push({ 
-                    x: boundedPos.x, 
-                    y: boundedPos.y, 
-                    name: partner.name,
-                    textWidth: this.estimateTextWidth(partner.name)
-                });
-                
-                const itemId = partner.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-                this.vizNodes.push({
-                    id: itemId,
-                    name: partner.name,
-                    x: boundedPos.x,
-                    y: boundedPos.y,
-                    type: 'external',
-                    radius: 10
-                });
-                
-                this.vizLinks.push({
-                    source: department.id,
-                    target: itemId,
-                    type: 'external',
-                    opacity: 0
-                });
-            });
-        }
+            }
+        });
         
         // Animate links
         setTimeout(() => {
             this.animateVizLinks();
         }, 500);
+    }
+
+    findOptimalLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
+        const maxAttempts = 12000; // Increased attempts significantly for better overlap prevention
+        let bestScore = -Infinity;
+        let bestLayout = null;
+        
+        console.log(`Finding optimal layout for ${nodesToPlace.length} nodes...`);
+        
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const layout = this.generateRandomLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY);
+            const score = this.scoreLayout(layout, canvasWidth, canvasHeight);
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestLayout = [...layout]; // Deep copy
+                console.log(`New best score: ${score.toFixed(2)} at attempt ${attempt}`);
+            }
+            
+            // Only early terminate for very high scores - prioritize finding overlap-free layouts
+            if (score > 2000) {
+                console.log(`Excellent overlap-free layout found at attempt ${attempt} with score ${score.toFixed(2)}`);
+                break;
+            }
+        }
+        
+        console.log(`Final best score: ${bestScore.toFixed(2)}`);
+        
+        // Apply best layout
+        if (bestLayout) {
+            bestLayout.forEach(node => {
+                this.vizNodes.push(node);
+            });
+        }
+    }
+
+    generateRandomLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
+        const layout = [];
+        const margin = 100;
+        const usableWidth = canvasWidth - (margin * 2);
+        const usableHeight = canvasHeight - (margin * 2);
+        const maxRadius = Math.min(usableWidth, usableHeight) / 2;
+        
+        // Define radius ranges for different node types
+        const radiusRanges = {
+            'degree': { min: maxRadius * 0.3, max: maxRadius * 0.5 },
+            'internal': { min: maxRadius * 0.55, max: maxRadius * 0.75 },
+            'external': { min: maxRadius * 0.8, max: maxRadius * 0.95 }
+        };
+        
+        nodesToPlace.forEach(nodeTemplate => {
+            const range = radiusRanges[nodeTemplate.type];
+            const radius = range.min + Math.random() * (range.max - range.min);
+            const angle = Math.random() * Math.PI * 2;
+            
+            // Avoid horizontal text line areas
+            const adjustedAngle = this.adjustAngleToAvoidTextLine(angle);
+            
+            const x = centerX + Math.cos(adjustedAngle) * radius;
+            const y = centerY + Math.sin(adjustedAngle) * radius;
+            
+            // Ensure within bounds
+            const boundedPos = this.ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin);
+            
+            layout.push({
+                ...nodeTemplate,
+                x: boundedPos.x,
+                y: boundedPos.y,
+                textWidth: this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type),
+                textHeight: this.estimateTextHeight(nodeTemplate.name, nodeTemplate.type)
+            });
+        });
+        
+        return layout;
+    }
+
+    scoreLayout(layout, canvasWidth, canvasHeight) {
+        let score = 1000; // Start with base score
+        
+        // Center coordinates for line intersection checks
+        const centerX = canvasWidth / 2;
+        const centerY = canvasHeight / 2;
+        
+        // Create central node for overlap checking
+        const centralNode = {
+            x: centerX,
+            y: centerY,
+            type: 'central',
+            radius: 25,
+            name: 'School of Visual Arts and Design' // The actual central text
+        };
+        
+        // Penalty system for overlaps and edge proximity
+        for (let i = 0; i < layout.length; i++) {
+            const nodeA = layout[i];
+            
+            // Check text boundaries - much more aggressive
+            const textBounds = this.getTextBounds(nodeA);
+            
+            // Severe penalty for being too close to edges
+            const edgeMargin = 80;
+            if (textBounds.left < edgeMargin) score -= 300;
+            if (textBounds.right > canvasWidth - edgeMargin) score -= 300;
+            if (textBounds.top < edgeMargin) score -= 300;
+            if (textBounds.bottom > canvasHeight - edgeMargin) score -= 300;
+            
+            // CRITICAL: Check overlap with central node text - HIGHEST PRIORITY
+            const centralOverlapPenalty = this.calculateOverlapPenalty(nodeA, centralNode);
+            score -= centralOverlapPenalty * 5; // Even higher penalty for overlapping central text
+            
+            // Check overlap with other nodes - HIGHEST PRIORITY
+            for (let j = i + 1; j < layout.length; j++) {
+                const nodeB = layout[j];
+                const overlapPenalty = this.calculateOverlapPenalty(nodeA, nodeB);
+                // Make overlap penalty MUCH more severe - this is the top priority
+                score -= overlapPenalty * 3; // Triple the overlap penalty
+            }
+            
+            // Check for line intersections with other nodes - high priority
+            const lineIntersectionPenalty = this.calculateLineIntersectionPenalty(nodeA, layout, centerX, centerY);
+            score -= lineIntersectionPenalty;
+            
+            // Distance bonus - much reduced impact to allow movement for overlap prevention
+            const distanceFromCenter = Math.sqrt(Math.pow(nodeA.x - centerX, 2) + Math.pow(nodeA.y - centerY, 2));
+            const idealDistance = this.getIdealDistance(nodeA.type, Math.min(canvasWidth, canvasHeight) / 2);
+            const distanceDiff = Math.abs(distanceFromCenter - idealDistance);
+            
+            // Much smaller bonus for distance - overlap prevention takes priority
+            score += Math.max(0, 20 - distanceDiff * 0.3); // Reduced from 50 and made more gradual
+        }
+        
+        return score;
+    }
+
+    calculateOverlapPenalty(nodeA, nodeB) {
+        const boundsA = this.getTextBounds(nodeA);
+        const boundsB = this.getTextBounds(nodeB);
+        
+        // Increase text bounds with larger buffer to prevent overlap
+        const buffer = 35; // Increased buffer even more for better spacing
+        const expandedBoundsA = {
+            left: boundsA.left - buffer,
+            right: boundsA.right + buffer,
+            top: boundsA.top - buffer,
+            bottom: boundsA.bottom + buffer
+        };
+        const expandedBoundsB = {
+            left: boundsB.left - buffer,
+            right: boundsB.right + buffer,
+            top: boundsB.top - buffer,
+            bottom: boundsB.bottom + buffer
+        };
+        
+        // Calculate overlap area with expanded bounds
+        const overlapLeft = Math.max(expandedBoundsA.left, expandedBoundsB.left);
+        const overlapRight = Math.min(expandedBoundsA.right, expandedBoundsB.right);
+        const overlapTop = Math.max(expandedBoundsA.top, expandedBoundsB.top);
+        const overlapBottom = Math.min(expandedBoundsA.bottom, expandedBoundsB.bottom);
+        
+        if (overlapLeft < overlapRight && overlapTop < overlapBottom) {
+            const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
+            return overlapArea * 15; // MUCH heavier penalty for overlap - was 8, now 15
+        }
+        
+        // Check if node circles are too close (node visual overlap)
+        const nodeDistance = Math.sqrt(
+            Math.pow(nodeA.x - nodeB.x, 2) + Math.pow(nodeA.y - nodeB.y, 2)
+        );
+        
+        const nodeRadiusA = nodeA.radius || 10;
+        const nodeRadiusB = nodeB.radius || 10;
+        const minNodeDistance = nodeRadiusA + nodeRadiusB + 40; // Increased minimum distance
+        
+        if (nodeDistance < minNodeDistance) {
+            return (minNodeDistance - nodeDistance) * 25; // Increased penalty - was 15, now 25
+        }
+        
+        // Additional penalty for text being too close (even without overlap)
+        const centerDistance = Math.sqrt(
+            Math.pow(nodeA.x - nodeB.x, 2) + Math.pow(nodeA.y - nodeB.y, 2)
+        );
+        
+        const minSafeDistance = (nodeA.textWidth + nodeB.textWidth) / 2 + 80; // Increased safe distance
+        if (centerDistance < minSafeDistance) {
+            return (minSafeDistance - centerDistance) * 12; // Increased penalty - was 8, now 12
+        }
+        
+        return 0;
+    }
+
+    calculateLineIntersectionPenalty(currentNode, allNodes, centerX, centerY) {
+        let penalty = 0;
+        
+        // Check if the line from center to current node intersects with other nodes
+        for (const otherNode of allNodes) {
+            if (otherNode === currentNode) continue;
+            
+            // Check if line segment intersects with the circular node
+            const nodeRadius = otherNode.radius || 10;
+            const clearanceBuffer = 25; // Increased clearance buffer
+            
+            // Calculate if line segment intersects with circle (node + buffer)
+            const intersects = this.lineIntersectsCircle(
+                centerX, centerY,           // Line start
+                currentNode.x, currentNode.y,  // Line end
+                otherNode.x, otherNode.y,   // Circle center
+                nodeRadius + clearanceBuffer  // Circle radius with buffer
+            );
+            
+            if (intersects) {
+                // Extremely heavy penalty for line intersecting node
+                penalty += 1000; // Doubled penalty to strongly discourage this
+                
+                // Additional penalty based on how close the intersection is
+                const distanceToNode = this.distanceFromPointToLine(
+                    otherNode.x, otherNode.y,
+                    centerX, centerY,
+                    currentNode.x, currentNode.y
+                );
+                
+                if (distanceToNode < nodeRadius + 10) {
+                    penalty += 500; // Extra penalty for very close intersection
+                }
+            }
+            
+            // Check if line passes very close to node (early warning system)
+            const minLineDistance = this.distanceFromPointToLine(
+                otherNode.x, otherNode.y,
+                centerX, centerY,
+                currentNode.x, currentNode.y
+            );
+            
+            const warningDistance = nodeRadius + 35;
+            if (minLineDistance < warningDistance) {
+                // Graduated penalty for lines coming too close
+                const proximityPenalty = (warningDistance - minLineDistance) * 20;
+                penalty += proximityPenalty;
+            }
+            
+            // Also check text bounds intersection with a lighter penalty
+            const textBounds = this.getTextBounds(otherNode);
+            const textBuffer = 15; // Increased text buffer
+            
+            if (this.lineIntersectsRectangle(
+                centerX, centerY, currentNode.x, currentNode.y,
+                textBounds.left - textBuffer, textBounds.top - textBuffer,
+                textBounds.right + textBuffer, textBounds.bottom + textBuffer
+            )) {
+                penalty += 200; // Increased penalty for text intersection
+            }
+        }
+        
+        return penalty;
+    }
+
+    lineIntersectsCircle(x1, y1, x2, y2, cx, cy, radius) {
+        // Check if line segment (x1,y1)-(x2,y2) intersects circle at (cx,cy) with given radius
+        
+        // Vector from line start to circle center
+        const dx = cx - x1;
+        const dy = cy - y1;
+        
+        // Vector from line start to line end
+        const lx = x2 - x1;
+        const ly = y2 - y1;
+        
+        // Length squared of line segment
+        const lengthSq = lx * lx + ly * ly;
+        
+        // Handle degenerate case (zero length line)
+        if (lengthSq === 0) {
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return dist <= radius;
+        }
+        
+        // Project circle center onto line segment
+        let t = (dx * lx + dy * ly) / lengthSq;
+        
+        // Clamp t to line segment bounds
+        t = Math.max(0, Math.min(1, t));
+        
+        // Find closest point on line segment to circle center
+        const closestX = x1 + t * lx;
+        const closestY = y1 + t * ly;
+        
+        // Calculate distance from circle center to closest point
+        const distX = cx - closestX;
+        const distY = cy - closestY;
+        const distance = Math.sqrt(distX * distX + distY * distY);
+        
+        // Return true if distance is less than or equal to radius
+        return distance <= radius;
+    }
+
+    distanceFromPointToLine(px, py, x1, y1, x2, y2) {
+        // Calculate the distance from point (px, py) to line segment (x1,y1)-(x2,y2)
+        const A = px - x1;
+        const B = py - y1;
+        const C = x2 - x1;
+        const D = y2 - y1;
+        
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        
+        if (lenSq === 0) {
+            // Line segment is actually a point
+            return Math.sqrt(A * A + B * B);
+        }
+        
+        let param = dot / lenSq;
+        
+        let xx, yy;
+        if (param < 0) {
+            xx = x1;
+            yy = y1;
+        } else if (param > 1) {
+            xx = x2;
+            yy = y2;
+        } else {
+            xx = x1 + param * C;
+            yy = y1 + param * D;
+        }
+        
+        const dx = px - xx;
+        const dy = py - yy;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    lineIntersectsRectangle(x1, y1, x2, y2, rectLeft, rectTop, rectRight, rectBottom) {
+        // Check if line segment (x1,y1)-(x2,y2) intersects with rectangle
+        // Using Liang-Barsky line clipping algorithm
+        
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        
+        const p = [-dx, dx, -dy, dy];
+        const q = [x1 - rectLeft, rectRight - x1, y1 - rectTop, rectBottom - y1];
+        
+        let u1 = 0;
+        let u2 = 1;
+        
+        for (let i = 0; i < 4; i++) {
+            if (p[i] === 0) {
+                if (q[i] < 0) return false;
+            } else {
+                const t = q[i] / p[i];
+                if (p[i] < 0) {
+                    if (t > u2) return false;
+                    if (t > u1) u1 = t;
+                } else {
+                    if (t < u1) return false;
+                    if (t < u2) u2 = t;
+                }
+            }
+        }
+        
+        return u1 <= u2;
+    }
+
+    getTextBounds(node) {
+        const textWidth = node.textWidth || this.estimateTextWidth(node.name, node.type);
+        const textHeight = node.textHeight || this.estimateTextHeight(node.name, node.type);
+        
+        // Handle central node differently - it's centered at the node position
+        if (node.type === 'central') {
+            return {
+                left: node.x - textWidth / 2,
+                right: node.x + textWidth / 2,
+                top: node.y - textHeight / 2,
+                bottom: node.y + textHeight / 2
+            };
+        }
+        
+        // Match the actual text positioning logic from the render method
+        const canvasWidth = this.vizCanvas.width;
+        const canvasHeight = this.vizCanvas.height;
+        const margin = 60;
+        
+        let textX = node.x;
+        let textY = node.y;
+        
+        // Apply the same edge-aware positioning logic as in rendering
+        if (node.x < margin) {
+            textX = node.x + node.radius + 60;
+        } else if (node.x > canvasWidth - margin) {
+            textX = node.x - node.radius - 60;
+        }
+        
+        if (node.y < margin) {
+            textY = node.y + node.radius + 30;
+        } else if (node.y > canvasHeight - margin) {
+            textY = node.y - node.radius - 20;
+        } else {
+            // Standard positioning with angle-based variation
+            const centerX = canvasWidth / 2;
+            const centerY = canvasHeight / 2;
+            const angle = Math.atan2(node.y - centerY, node.x - centerX);
+            
+            if (angle > Math.PI/3 && angle < 2*Math.PI/3) {
+                textY = node.y + node.radius + 35;
+            } else if (angle < -Math.PI/3 && angle > -2*Math.PI/3) {
+                textY = node.y - node.radius - 25;
+            } else {
+                textY = node.y + node.radius + 30;
+            }
+        }
+        
+        // Account for multi-line text centering
+        const lines = this.getWrappedLines(node.name, node.type);
+        const lineHeight = 15;
+        const totalTextHeight = lines.length * lineHeight;
+        const startY = textY - (lines.length - 1) * lineHeight / 2;
+        
+        return {
+            left: textX - textWidth / 2,
+            right: textX + textWidth / 2,
+            top: startY - lineHeight / 2,
+            bottom: startY + totalTextHeight - lineHeight / 2
+        };
+    }
+    
+    getWrappedLines(text, nodeType) {
+        // Central nodes don't wrap - they're single line
+        if (nodeType === 'central') {
+            return [text];
+        }
+        
+        // Match the wrapping logic from rendering
+        const maxWidth = nodeType === 'degree' ? 110 : 70;
+        const words = text.split(' ');
+        let line = '';
+        let lines = [];
+        
+        for (let i = 0; i < words.length; i++) {
+            const testLine = line + words[i] + ' ';
+            // Estimate text width (we can't measure without canvas context here)
+            const avgCharWidth = 10; // Approximate for 17px Orbitron
+            const testWidth = testLine.length * avgCharWidth;
+            
+            if (testWidth > maxWidth && i > 0) {
+                lines.push(line);
+                line = words[i] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line);
+        
+        return lines;
+    }
+
+    estimateTextHeight(text, nodeType = 'degree') {
+        // Central nodes use single line 22px font
+        if (nodeType === 'central') {
+            return 22; // Single line height for 22px font
+        }
+        
+        // Use the same wrapping logic as rendering to get accurate line count
+        const lines = this.getWrappedLines(text, nodeType);
+        const lineHeight = 15; // Match the rendering line height
+        return lines.length * lineHeight;
+    }
+
+    getIdealDistance(nodeType, maxRadius) {
+        switch (nodeType) {
+            case 'degree': return maxRadius * 0.4;
+            case 'internal': return maxRadius * 0.65;
+            case 'external': return maxRadius * 0.85;
+            default: return maxRadius * 0.5;
+        }
     }
     
     adjustAngleToAvoidTextLine(angle) {
@@ -1443,14 +1604,29 @@ class TronCircuitboard {
         return (baseAngle * spacingFactor) + stagger;
     }
     
-    estimateTextWidth(text) {
-        // Much more accurate estimation for larger 17px Orbitron font
-        const avgCharWidth = 12; // Increased for 17px font size
-        const minWidth = 120; // Increased minimum for larger font
-        const maxWidth = 400; // Increased maximum for larger font
+    estimateTextWidth(text, nodeType = 'degree') {
+        // Central nodes use 22px Orbitron bold and don't wrap
+        if (nodeType === 'central') {
+            const avgCharWidth = 14; // Larger for 22px Orbitron bold
+            return text.length * avgCharWidth;
+        }
         
-        const estimatedWidth = Math.min(maxWidth, Math.max(minWidth, text.length * avgCharWidth));
-        return estimatedWidth;
+        // Match the actual wrapping widths used in rendering
+        const maxWidth = nodeType === 'degree' ? 110 : 70;
+        
+        // For multi-line text, use the max width constraint
+        const lines = this.getWrappedLines(text, nodeType);
+        let maxLineWidth = 0;
+        
+        // Estimate each line's width more accurately for 17px Orbitron
+        const avgCharWidth = 10; // More accurate for 17px Orbitron bold
+        for (const line of lines) {
+            const lineWidth = line.trim().length * avgCharWidth;
+            maxLineWidth = Math.max(maxLineWidth, lineWidth);
+        }
+        
+        // Don't exceed the wrapping constraint
+        return Math.min(maxLineWidth, maxWidth);
     }
 
     ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin) {
