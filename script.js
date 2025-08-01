@@ -266,7 +266,30 @@ class TronCircuitboard {
     
     setupCanvas() {
         this.resizeCanvas();
-        window.addEventListener('resize', () => this.resizeCanvas());
+        
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            // Debounce resize events to avoid excessive redraws
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                this.resizeCanvas();
+                this.generateGrid(); // Regenerate grid for new dimensions
+                
+                // If we're in detail view, recreate the visualization
+                if (this.isDetailView && this.currentNode) {
+                    this.createPartnershipVisualization(this.currentNode);
+                } else if (this.nodesGenerated) {
+                    // Regenerate node positions for new canvas size
+                    this.generateNodes();
+                }
+                
+                // Force a redraw if in detail view
+                if (this.isDetailView && this.vizAnimationId) {
+                    cancelAnimationFrame(this.vizAnimationId);
+                    this.animateVisualization();
+                }
+            }, 150);
+        });
     }
     
     setupLegendFilters() {
@@ -771,55 +794,104 @@ class TronCircuitboard {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
         
-        // Position nodes in oval arrangement: 2-3-3-2 pattern
+        // Get text container bounds for better positioning relative to it
+        const textArea = {
+            left: textRect.left,
+            right: textRect.right,
+            top: textRect.top,
+            bottom: textRect.bottom,
+            centerX: textRect.left + textRect.width / 2,
+            centerY: textRect.top + textRect.height / 2,
+            width: textRect.width,
+            height: textRect.height
+        };
+        
+        // Define a much larger exclusion zone that completely avoids the title area
+        const exclusionPadding = 200; // Much larger padding
+        const textExclusionArea = {
+            left: textArea.left - exclusionPadding,
+            right: textArea.right + exclusionPadding,
+            top: textArea.top - exclusionPadding,
+            bottom: textArea.bottom + exclusionPadding
+        };
+        
+        // Calculate minimum safe distance from text center
+        const minSafeDistance = Math.max(
+            (textArea.width / 2) + exclusionPadding,
+            (textArea.height / 2) + exclusionPadding
+        );
+        
+        // Position nodes in a circular pattern around the title with guaranteed safe distance
         const totalNodes = this.departmentNames.length;
+        const baseRadius = minSafeDistance + 50; // Add extra buffer beyond safe distance
+        const radiusVariation = 60;
         
-        // Define the 4 rows with different node counts
-        let rowConfig, positionInRow, rowY;
+        // Calculate angle for this node with better distribution
+        const angle = (index / totalNodes) * 2 * Math.PI + (Math.PI / totalNodes); // Offset to avoid straight axes
+        const radius = baseRadius + (Math.sin(index * 0.7) * radiusVariation); // Use sine for smoother variation
         
-        if (index < 2) {
-            // Top row: 2 nodes
-            rowConfig = { nodesInRow: 2, rowIndex: 0 };
-            positionInRow = index;
-            rowY = this.canvas.height * 0.08;
-        } else if (index < 5) {
-            // Second row: 3 nodes
-            rowConfig = { nodesInRow: 3, rowIndex: 1 };
-            positionInRow = index - 2;
-            rowY = this.canvas.height * 0.25;
-        } else if (index < 8) {
-            // Third row: 3 nodes (under CAH title)
-            rowConfig = { nodesInRow: 3, rowIndex: 2 };
-            positionInRow = index - 5;
-            rowY = this.canvas.height * 0.75;
-        } else {
-            // Bottom row: 2 nodes
-            rowConfig = { nodesInRow: 2, rowIndex: 3 };
-            positionInRow = index - 8;
-            rowY = this.canvas.height * 0.92;
+        // Calculate position relative to text center
+        let x = textArea.centerX + Math.cos(angle) * radius - nodeWidth/2;
+        let y = textArea.centerY + Math.sin(angle) * radius - nodeHeight/2;
+        
+        // Ensure nodes stay within reasonable bounds
+        const margin = 60;
+        const minX = margin;
+        const maxX = this.canvas.width - margin - nodeWidth;  
+        const minY = margin;
+        const maxY = this.canvas.height - margin - nodeHeight;
+        
+        x = Math.max(minX, Math.min(x, maxX));
+        y = Math.max(minY, Math.min(y, maxY));
+        
+        // If overlapping with text exclusion area, push node away with minimum distance
+        if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
+            // Calculate push direction from text center
+            const pushAngle = Math.atan2(y + nodeHeight/2 - textArea.centerY, x + nodeWidth/2 - textArea.centerX);
+            const minDistanceFromText = baseRadius + exclusionPadding/2;
+            
+            x = textArea.centerX + Math.cos(pushAngle) * minDistanceFromText - nodeWidth/2;
+            y = textArea.centerY + Math.sin(pushAngle) * minDistanceFromText - nodeHeight/2;
+            
+            // Re-apply bounds
+            x = Math.max(minX, Math.min(x, maxX));
+            y = Math.max(minY, Math.min(y, maxY));
         }
         
-        // Calculate horizontal spacing for this row
-        const horizontalMargin = 100; // Extra margin for oval shape
-        const availableWidth = this.canvas.width - (2 * horizontalMargin);
+        // Check for overlap with existing nodes and adjust if needed
+        let attempts = 0;
+        const maxAttempts = 50; // More attempts for better positioning
         
-        let x;
-        if (rowConfig.nodesInRow === 1) {
-            // Center single node
-            x = this.canvas.width / 2;
-        } else {
-            // Space multiple nodes evenly
-            const spacing = availableWidth / (rowConfig.nodesInRow - 1);
-            x = horizontalMargin + (positionInRow * spacing);
+        while (attempts < maxAttempts && this.overlapsWithExistingNodes(x, y, nodeWidth, nodeHeight)) {
+            // Try a new position with better spacing logic
+            const newAngle = (index / totalNodes) * 2 * Math.PI + (attempts * 0.2); // Systematic angle adjustment
+            const newRadius = baseRadius + 30 + (attempts * 15); // Gradually increase radius
+            
+            x = textArea.centerX + Math.cos(newAngle) * newRadius - nodeWidth/2;
+            y = textArea.centerY + Math.sin(newAngle) * newRadius - nodeHeight/2;
+            
+            // Keep within bounds
+            x = Math.max(minX, Math.min(x, maxX));
+            y = Math.max(minY, Math.min(y, maxY));
+            
+            // Ensure it still doesn't overlap with text
+            if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
+                const pushAngle = Math.atan2(y + nodeHeight/2 - textArea.centerY, x + nodeWidth/2 - textArea.centerX);
+                const pushDistance = baseRadius + textExclusionPadding/2 + (attempts * 10);
+                
+                x = textArea.centerX + Math.cos(pushAngle) * pushDistance - nodeWidth/2;
+                y = textArea.centerY + Math.sin(pushAngle) * pushDistance - nodeHeight/2;
+                
+                x = Math.max(minX, Math.min(x, maxX));
+                y = Math.max(minY, Math.min(y, maxY));
+            }
+            
+            attempts++;
         }
         
-        // Center the node on its calculated position
-        x = x - (nodeWidth / 2);
-        let y = rowY - (nodeHeight / 2);
-        
-        // Ensure nodes stay fully on screen
-        x = Math.max(15, Math.min(x, this.canvas.width - nodeWidth - 15));
-        y = Math.max(15, Math.min(y, this.canvas.height - nodeHeight - 15));
+        // Final bounds check with adequate margins
+        x = Math.max(30, Math.min(x, this.canvas.width - nodeWidth - 30));
+        y = Math.max(30, Math.min(y, this.canvas.height - nodeHeight - 30));
         
         // Set final position
         node.style.left = x + 'px';
@@ -848,7 +920,7 @@ class TronCircuitboard {
     }
     
     overlapsWithExistingNodes(x, y, width, height) {
-        const buffer = 30; // Increased buffer for better spacing between larger nodes
+        const buffer = 50; // Increased buffer for better spacing between nodes
         return this.nodes.some(existingNode => {
             return !(x + width + buffer < existingNode.x || 
                      x > existingNode.x + existingNode.width + buffer || 
@@ -1922,9 +1994,8 @@ class TronCircuitboard {
     animate() {
         this.animationTime += 0.05; // Increment time for animations
         
-        // Main canvas animation - use more transparent overlay to show grid
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        // Clear canvas but don't fill with overlay to preserve grid background
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Draw and update lines
         this.lines.forEach(line => {
@@ -1993,8 +2064,8 @@ class TronCircuitboard {
     }
     
     animateVisualization() {
-        // Clear viz canvas with black background
-        this.vizCtx.fillStyle = 'rgba(0, 0, 0, 1)';
+        // Fill with semi-transparent black to hide main view but show grid
+        this.vizCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
         this.vizCtx.fillRect(0, 0, this.vizCanvas.width, this.vizCanvas.height);
         
         // Update animation time
