@@ -2565,22 +2565,43 @@ class TronCircuitboard {
                 y: line.start.y + (line.end.y - line.start.y) * line.progress
             };
             
-            // Draw glow
+            // Draw multiple glow layers for more dramatic effect
+            // Outer glow
             this.ctx.shadowColor = line.color;
-            this.ctx.shadowBlur = 10 * line.glowIntensity;
+            this.ctx.shadowBlur = 25 * line.glowIntensity;
             this.ctx.strokeStyle = line.color;
-            this.ctx.lineWidth = line.width;
-            this.ctx.globalAlpha = 0.8;
+            this.ctx.lineWidth = line.width * 1.5;
+            this.ctx.globalAlpha = 0.3;
             
             this.ctx.beginPath();
             this.ctx.moveTo(line.start.x, line.start.y);
             this.ctx.lineTo(currentEnd.x, currentEnd.y);
             this.ctx.stroke();
             
-            // Draw core line
+            // Middle glow
+            this.ctx.shadowBlur = 15 * line.glowIntensity;
+            this.ctx.lineWidth = line.width * 1.2;
+            this.ctx.globalAlpha = 0.6;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(line.start.x, line.start.y);
+            this.ctx.lineTo(currentEnd.x, currentEnd.y);
+            this.ctx.stroke();
+            
+            // Inner glow
+            this.ctx.shadowBlur = 8 * line.glowIntensity;
+            this.ctx.lineWidth = line.width;
+            this.ctx.globalAlpha = 0.9;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(line.start.x, line.start.y);
+            this.ctx.lineTo(currentEnd.x, currentEnd.y);
+            this.ctx.stroke();
+            
+            // Draw bright core line
             this.ctx.shadowBlur = 0;
             this.ctx.globalAlpha = 1;
-            this.ctx.lineWidth = line.width * 0.5;
+            this.ctx.lineWidth = line.width * 0.7; // Slightly thicker core
             this.ctx.strokeStyle = '#ffffff';
             
             this.ctx.beginPath();
@@ -2622,12 +2643,13 @@ class TronCircuitboard {
             };
         }
         
-        // Draw glow
+        // Draw multiple glow layers for more dramatic effect
+        // Outer glow
         this.ctx.shadowColor = line.color;
-        this.ctx.shadowBlur = 10 * line.glowIntensity;
+        this.ctx.shadowBlur = 25 * line.glowIntensity;
         this.ctx.strokeStyle = line.color;
-        this.ctx.lineWidth = line.width;
-        this.ctx.globalAlpha = 0.8;
+        this.ctx.lineWidth = line.width * 1.5;
+        this.ctx.globalAlpha = 0.3;
         
         this.ctx.beginPath();
         this.ctx.moveTo(line.start.x, line.start.y);
@@ -2643,10 +2665,48 @@ class TronCircuitboard {
         
         this.ctx.stroke();
         
-        // Draw core line
+        // Middle glow
+        this.ctx.shadowBlur = 15 * line.glowIntensity;
+        this.ctx.lineWidth = line.width * 1.2;
+        this.ctx.globalAlpha = 0.6;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(line.start.x, line.start.y);
+        
+        if (line.progress <= straightProgress) {
+            // Draw straight segment only
+            this.ctx.lineTo(currentEnd.x, currentEnd.y);
+        } else {
+            // Draw straight segment, then curve
+            this.ctx.lineTo(line.straightEnd.x, line.straightEnd.y);
+            this.ctx.lineTo(currentEnd.x, currentEnd.y);
+        }
+        
+        this.ctx.stroke();
+        
+        // Inner glow
+        this.ctx.shadowBlur = 8 * line.glowIntensity;
+        this.ctx.lineWidth = line.width;
+        this.ctx.globalAlpha = 0.9;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(line.start.x, line.start.y);
+        
+        if (line.progress <= straightProgress) {
+            // Draw straight segment only
+            this.ctx.lineTo(currentEnd.x, currentEnd.y);
+        } else {
+            // Draw straight segment, then curve
+            this.ctx.lineTo(line.straightEnd.x, line.straightEnd.y);
+            this.ctx.lineTo(currentEnd.x, currentEnd.y);
+        }
+        
+        this.ctx.stroke();
+        
+        // Draw bright core line
         this.ctx.shadowBlur = 0;
         this.ctx.globalAlpha = 1;
-        this.ctx.lineWidth = line.width * 0.5;
+        this.ctx.lineWidth = line.width * 0.7; // Slightly thicker core
         this.ctx.strokeStyle = '#ffffff';
         
         this.ctx.beginPath();
