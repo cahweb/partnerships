@@ -279,8 +279,8 @@ class TronCircuitboard {
                 if (this.isDetailView && this.currentNode) {
                     this.createPartnershipVisualization(this.currentNode);
                 } else if (this.nodesGenerated) {
-                    // Regenerate node positions for new canvas size
-                    this.generateNodes();
+                    // Reposition existing nodes for new canvas size with responsive logic
+                    this.repositionNodesForResize();
                 }
                 
                 // Force a redraw if in detail view
@@ -363,12 +363,13 @@ class TronCircuitboard {
             const rect = collegeText.getBoundingClientRect();
             const canvasRect = this.canvas.getBoundingClientRect();
             
-            // No padding - connect directly to border edges
+            // Add padding to prevent lines from overlapping the box
+            const padding = 15; // Pixels of padding around the text box
             textBounds = {
-                left: rect.left - canvasRect.left,
-                right: rect.right - canvasRect.left,
-                top: rect.top - canvasRect.top,
-                bottom: rect.bottom - canvasRect.top
+                left: rect.left - canvasRect.left - padding,
+                right: rect.right - canvasRect.left + padding,
+                top: rect.top - canvasRect.top - padding,
+                bottom: rect.bottom - canvasRect.top + padding
             };
             
             // Ensure bounds are within canvas
@@ -806,8 +807,21 @@ class TronCircuitboard {
             height: textRect.height
         };
         
-        // Define a much larger exclusion zone that completely avoids the title area
-        const exclusionPadding = 200; // Much larger padding
+        // Define responsive exclusion padding and margins based on screen size
+        const isMobile = window.innerWidth <= 768;
+        const isSmallMobile = window.innerWidth <= 480;
+        const isMediumMobile = window.innerWidth <= 600; // Add medium mobile breakpoint
+        
+        // Adjust exclusion padding for screen size (further reduced for small screens)
+        let exclusionPadding = 120; // Desktop stays the same
+        if (isSmallMobile) {
+            exclusionPadding = 25; // Much smaller for small mobile to fit all nodes
+        } else if (isMediumMobile) {
+            exclusionPadding = 35; // More aggressive for medium mobile
+        } else if (isMobile) {
+            exclusionPadding = 45; // More aggressive for regular mobile
+        }
+        
         const textExclusionArea = {
             left: textArea.left - exclusionPadding,
             right: textArea.right + exclusionPadding,
@@ -815,7 +829,7 @@ class TronCircuitboard {
             bottom: textArea.bottom + exclusionPadding
         };
         
-        // Calculate minimum safe distance from text center
+        // Calculate minimum safe distance from text center (responsive)
         const minSafeDistance = Math.max(
             (textArea.width / 2) + exclusionPadding,
             (textArea.height / 2) + exclusionPadding
@@ -823,8 +837,24 @@ class TronCircuitboard {
         
         // Position nodes in a circular pattern around the title with guaranteed safe distance
         const totalNodes = this.departmentNames.length;
-        const baseRadius = minSafeDistance + 50; // Add extra buffer beyond safe distance
-        const radiusVariation = 60;
+        
+        // Adjust base radius and variation for screen size
+        let baseRadius = minSafeDistance + 50;
+        let radiusVariation = 60;
+        
+        if (isSmallMobile) {
+            // For small mobile, use much smaller radius and pack very tight
+            baseRadius = Math.min(minSafeDistance + 15, this.canvas.width * 0.2);
+            radiusVariation = 15;
+        } else if (isMediumMobile) {
+            // For medium mobile, use smaller radius
+            baseRadius = Math.min(minSafeDistance + 20, this.canvas.width * 0.22);
+            radiusVariation = 20;
+        } else if (isMobile) {
+            // For mobile, moderate adjustment
+            baseRadius = Math.min(minSafeDistance + 25, this.canvas.width * 0.25);
+            radiusVariation = 25;
+        }
         
         // Calculate angle for this node with better distribution
         const angle = (index / totalNodes) * 2 * Math.PI + (Math.PI / totalNodes); // Offset to avoid straight axes
@@ -834,8 +864,16 @@ class TronCircuitboard {
         let x = textArea.centerX + Math.cos(angle) * radius - nodeWidth/2;
         let y = textArea.centerY + Math.sin(angle) * radius - nodeHeight/2;
         
-        // Ensure nodes stay within reasonable bounds
-        const margin = 60;
+        // Ensure nodes stay within reasonable bounds (responsive margins)
+        let margin = 60;
+        if (isSmallMobile) {
+            margin = 10; // Very small margin for small screens to maximize space
+        } else if (isMediumMobile) {
+            margin = 15; // Small margin for medium mobile
+        } else if (isMobile) {
+            margin = 18; // Reduced margin for mobile
+        }
+        
         const minX = margin;
         const maxX = this.canvas.width - margin - nodeWidth;  
         const minY = margin;
@@ -858,35 +896,67 @@ class TronCircuitboard {
             y = Math.max(minY, Math.min(y, maxY));
         }
         
-        // Check for overlap with existing nodes and adjust if needed
-        let attempts = 0;
-        const maxAttempts = 50; // More attempts for better positioning
+        // Check for overlap with existing nodes and adjust if needed (responsive buffer)
+        let nodeBuffer = 50; // Default buffer
+        if (isSmallMobile) {
+            nodeBuffer = 15; // Much smaller buffer for small screens to fit more nodes
+        } else if (isMediumMobile) {
+            nodeBuffer = 20; // Smaller buffer for medium mobile
+        } else if (isMobile) {
+            nodeBuffer = 22; // Reduced buffer for mobile
+        }
         
-        while (attempts < maxAttempts && this.overlapsWithExistingNodes(x, y, nodeWidth, nodeHeight)) {
-            // Try a new position with better spacing logic
-            const newAngle = (index / totalNodes) * 2 * Math.PI + (attempts * 0.2); // Systematic angle adjustment
-            const newRadius = baseRadius + 30 + (attempts * 15); // Gradually increase radius
+        let attempts = 0;
+        const maxAttempts = (isSmallMobile || isMediumMobile) ? 100 : 50; // More attempts for small and medium mobile
+        
+        while (attempts < maxAttempts && this.overlapsWithExistingNodes(x, y, nodeWidth, nodeHeight, nodeBuffer)) {
+            attempts++;
             
-            x = textArea.centerX + Math.cos(newAngle) * newRadius - nodeWidth/2;
-            y = textArea.centerY + Math.sin(newAngle) * newRadius - nodeHeight/2;
-            
-            // Keep within bounds
-            x = Math.max(minX, Math.min(x, maxX));
-            y = Math.max(minY, Math.min(y, maxY));
-            
-            // Ensure it still doesn't overlap with text
-            if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
-                const pushAngle = Math.atan2(y + nodeHeight/2 - textArea.centerY, x + nodeWidth/2 - textArea.centerX);
-                const pushDistance = baseRadius + textExclusionPadding/2 + (attempts * 10);
+            if ((isSmallMobile || isMediumMobile) && attempts > 20) {
+                // Use grid-based fallback for small and medium mobile screens after initial attempts
+                const gridCols = 4;
+                const gridRows = Math.ceil(totalNodes / gridCols);
+                const gridIndex = index + attempts;
+                const col = gridIndex % gridCols;
+                const row = Math.floor(gridIndex / gridCols);
                 
-                x = textArea.centerX + Math.cos(pushAngle) * pushDistance - nodeWidth/2;
-                y = textArea.centerY + Math.sin(pushAngle) * pushDistance - nodeHeight/2;
+                const gridWidth = this.canvas.width - (margin * 2);
+                const gridHeight = this.canvas.height - (margin * 2);
+                const cellWidth = gridWidth / gridCols;
+                const cellHeight = gridHeight / gridRows;
                 
+                x = margin + (col * cellWidth) + (cellWidth - nodeWidth) / 2;
+                y = margin + (row * cellHeight) + (cellHeight - nodeHeight) / 2;
+                
+                // Skip if this overlaps with text
+                if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
+                    continue;
+                }
+            } else {
+                // Try a new position with better spacing logic
+                const newAngle = (index / totalNodes) * 2 * Math.PI + (attempts * 0.2); // Systematic angle adjustment
+                const newRadius = baseRadius + 30 + (attempts * 15); // Gradually increase radius
+                
+                x = textArea.centerX + Math.cos(newAngle) * newRadius - nodeWidth/2;
+                y = textArea.centerY + Math.sin(newAngle) * newRadius - nodeHeight/2;
+                
+                // Keep within bounds
                 x = Math.max(minX, Math.min(x, maxX));
                 y = Math.max(minY, Math.min(y, maxY));
+                
+                // Ensure it still doesn't overlap with text
+                if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
+                    const pushAngle = Math.atan2(y + nodeHeight/2 - textArea.centerY, x + nodeWidth/2 - textArea.centerX);
+                    const pushDistance = baseRadius + exclusionPadding/2 + (attempts * 10);
+                    
+                    x = textArea.centerX + Math.cos(pushAngle) * pushDistance - nodeWidth/2;
+                    y = textArea.centerY + Math.sin(pushAngle) * pushDistance - nodeHeight/2;
+                    
+                    // Re-apply bounds
+                    x = Math.max(minX, Math.min(x, maxX));
+                    y = Math.max(minY, Math.min(y, maxY));
+                }
             }
-            
-            attempts++;
         }
         
         // Final bounds check with adequate margins
@@ -919,8 +989,7 @@ class TronCircuitboard {
         this.addNodeInteractions(node);
     }
     
-    overlapsWithExistingNodes(x, y, width, height) {
-        const buffer = 50; // Increased buffer for better spacing between nodes
+    overlapsWithExistingNodes(x, y, width, height, buffer = 50) {
         return this.nodes.some(existingNode => {
             return !(x + width + buffer < existingNode.x || 
                      x > existingNode.x + existingNode.width + buffer || 
@@ -935,6 +1004,184 @@ class TronCircuitboard {
                  x > textArea.right || 
                  y + height < textArea.top || 
                  y > textArea.bottom);
+    }
+
+    repositionNodesForResize() {
+        // Reposition all existing nodes using responsive logic for new screen size
+        if (!this.nodes || this.nodes.length === 0) return;
+        
+        // Get the text container bounds for the new screen size
+        const textContainer = document.getElementById('textContainer');
+        const textRect = textContainer.getBoundingClientRect();
+        
+        const textArea = {
+            left: textRect.left,
+            right: textRect.right,
+            top: textRect.top,
+            bottom: textRect.bottom,
+            centerX: textRect.left + textRect.width / 2,
+            centerY: textRect.top + textRect.height / 2,
+            width: textRect.width,
+            height: textRect.height
+        };
+        
+        // Define responsive settings for new screen size
+        const isMobile = window.innerWidth <= 768;
+        const isSmallMobile = window.innerWidth <= 480;
+        const isMediumMobile = window.innerWidth <= 600;
+        
+        let exclusionPadding = 120;
+        if (isSmallMobile) {
+            exclusionPadding = 25;
+        } else if (isMediumMobile) {
+            exclusionPadding = 35;
+        } else if (isMobile) {
+            exclusionPadding = 45;
+        }
+        
+        const textExclusionArea = {
+            left: textArea.left - exclusionPadding,
+            right: textArea.right + exclusionPadding,
+            top: textArea.top - exclusionPadding,
+            bottom: textArea.bottom + exclusionPadding
+        };
+        
+        const minSafeDistance = Math.max(
+            (textArea.width / 2) + exclusionPadding,
+            (textArea.height / 2) + exclusionPadding
+        );
+        
+        let baseRadius = minSafeDistance + 50;
+        if (isSmallMobile) {
+            baseRadius = Math.min(minSafeDistance + 15, this.canvas.width * 0.2);
+        } else if (isMediumMobile) {
+            baseRadius = Math.min(minSafeDistance + 20, this.canvas.width * 0.22);
+        } else if (isMobile) {
+            baseRadius = Math.min(minSafeDistance + 25, this.canvas.width * 0.25);
+        }
+        
+        let margin = 60;
+        if (isSmallMobile) {
+            margin = 10;
+        } else if (isMediumMobile) {
+            margin = 15;
+        } else if (isMobile) {
+            margin = 18;
+        }
+        
+        let nodeBuffer = 50;
+        if (isSmallMobile) {
+            nodeBuffer = 15;
+        } else if (isMediumMobile) {
+            nodeBuffer = 20;
+        } else if (isMobile) {
+            nodeBuffer = 22;
+        }
+        
+        // Reposition each existing node
+        this.nodes.forEach((node, index) => {
+            const nodeWidth = node.offsetWidth || 160;
+            const nodeHeight = node.offsetHeight || 40;
+            
+            // Calculate new position using same logic as createNode
+            const totalNodes = this.nodes.length;
+            const angle = (index / totalNodes) * 2 * Math.PI + (Math.PI / totalNodes);
+            const radiusVariation = isSmallMobile ? 15 : (isMediumMobile ? 20 : (isMobile ? 25 : 60));
+            const radius = baseRadius + (Math.sin(index * 0.7) * radiusVariation);
+            
+            let x = textArea.centerX + Math.cos(angle) * radius - nodeWidth/2;
+            let y = textArea.centerY + Math.sin(angle) * radius - nodeHeight/2;
+            
+            // Apply bounds
+            const minX = margin;
+            const maxX = this.canvas.width - margin - nodeWidth;
+            const minY = margin;
+            const maxY = this.canvas.height - margin - nodeHeight;
+            
+            x = Math.max(minX, Math.min(x, maxX));
+            y = Math.max(minY, Math.min(y, maxY));
+            
+            // Handle text overlap
+            if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
+                const pushAngle = Math.atan2(y + nodeHeight/2 - textArea.centerY, x + nodeWidth/2 - textArea.centerX);
+                const minDistanceFromText = baseRadius + exclusionPadding/2;
+                
+                x = textArea.centerX + Math.cos(pushAngle) * minDistanceFromText - nodeWidth/2;
+                y = textArea.centerY + Math.sin(pushAngle) * minDistanceFromText - nodeHeight/2;
+                
+                x = Math.max(minX, Math.min(x, maxX));
+                y = Math.max(minY, Math.min(y, maxY));
+            }
+            
+            // Check for overlaps with other repositioned nodes and adjust if needed
+            let attempts = 0;
+            const maxAttempts = (isSmallMobile || isMediumMobile) ? 50 : 25;
+            
+            while (attempts < maxAttempts && this.overlapsWithRepositionedNodes(x, y, nodeWidth, nodeHeight, nodeBuffer, index)) {
+                attempts++;
+                
+                if ((isSmallMobile || isMediumMobile) && attempts > 10) {
+                    // Use grid fallback for mobile screens
+                    const gridCols = 4;
+                    const gridIndex = index + attempts;
+                    const col = gridIndex % gridCols;
+                    const row = Math.floor(gridIndex / gridCols);
+                    
+                    const gridWidth = this.canvas.width - (margin * 2);
+                    const gridHeight = this.canvas.height - (margin * 2);
+                    const cellWidth = gridWidth / gridCols;
+                    const cellHeight = gridHeight / Math.ceil(totalNodes / gridCols);
+                    
+                    x = margin + (col * cellWidth) + (cellWidth - nodeWidth) / 2;
+                    y = margin + (row * cellHeight) + (cellHeight - nodeHeight) / 2;
+                    
+                    if (!this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
+                        break;
+                    }
+                } else {
+                    // Adjust position systematically
+                    const newAngle = angle + (attempts * 0.3);
+                    const newRadius = baseRadius + 20 + (attempts * 15);
+                    
+                    x = textArea.centerX + Math.cos(newAngle) * newRadius - nodeWidth/2;
+                    y = textArea.centerY + Math.sin(newAngle) * newRadius - nodeHeight/2;
+                    
+                    x = Math.max(minX, Math.min(x, maxX));
+                    y = Math.max(minY, Math.min(y, maxY));
+                }
+            }
+            
+            // Apply the new position with smooth transition
+            node.style.transition = 'all 0.3s ease-out';
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+        });
+        
+        // Remove transition after animation completes
+        setTimeout(() => {
+            this.nodes.forEach(node => {
+                node.style.transition = '';
+            });
+        }, 300);
+    }
+    
+    overlapsWithRepositionedNodes(x, y, width, height, buffer, currentIndex) {
+        // Check overlap with nodes that have already been repositioned
+        for (let i = 0; i < currentIndex; i++) {
+            const existingNode = this.nodes[i];
+            const existingX = parseInt(existingNode.style.left);
+            const existingY = parseInt(existingNode.style.top);
+            const existingWidth = existingNode.offsetWidth || 160;
+            const existingHeight = existingNode.offsetHeight || 40;
+            
+            if (!(x + width + buffer < existingX || 
+                  x > existingX + existingWidth + buffer || 
+                  y + height + buffer < existingY || 
+                  y > existingY + existingHeight + buffer)) {
+                return true;
+            }
+        }
+        return false;
     }
     
     addNodeInteractions(node) {

@@ -100,7 +100,7 @@
         "Orlando Shakes",
         "UCF Opera Board",
         "Theatre Professional Advisory Board",
-        "OUC (support of UCF Celebrates the Arts)"
+        "OUC"
       ],
       "highlights": [
         {
@@ -290,11 +290,9 @@
       ],
       "internalPartners": [
         "Study abroad opportunities with UCF Abroad",
-        "Florida Prison Education Project",
-        "RICHES: Podcast Documentaries Collection"
+        "Florida Prison Education Project"
       ],
       "externalPartners": [
-        "Florida Prison Education Project",
         "ChronoPoints Laser Scanning",
         "RICHES: Podcast Documentaries Collection",
         "Florida Historical Quarterly: Podcast Project",
@@ -393,7 +391,10 @@
         "UCF Center for Ethics",
         "Initiative for Ethics in Entertainment and Media with the Nicholson School of Communication and Media (NSCM)"
       ],
-      "externalPartners": [],
+      "externalPartners": [
+        "Orange County Regional History Center",
+        "Advent Health"
+      ],
       "highlights": [
         {
           "title": "UCF Wins First Place in the Southeast Regional Ethics Bowl",
@@ -520,8 +521,8 @@
       "image": "te.jpg",
       "spotlight": "https://cah.ucf.edu/spotlight/themed-experience-2025/",
       "degrees": [
-        "MS in Themed Experience",
-        "MFA in Themed Experience"
+        "Themed Experience MS",
+        "Themed Experience MFA"
       ],
       "internalPartners": [
         "CAVE",

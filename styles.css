@@ -37,7 +37,7 @@ body, html {
 
 .text-line {
     color: #00ffff;
-    font-size: 3.5rem;
+    font-size: 2rem; /* Reduced from 3rem (2/3 size) */
     font-weight: 400;
     text-shadow: 
         0 0 10px #00ffff,
@@ -47,11 +47,11 @@ body, html {
     opacity: 0;
     transform: translateY(-100px);
     transition: all 2s ease-out;
-    margin-bottom: 20px;
-    letter-spacing: 2px;
+    margin-bottom: 10px; /* Reduced from 15px */
+    letter-spacing: 1px; /* Reduced from 1.5px */
     border: 2px solid #00ffff;
-    border-radius: 10px;
-    padding: 20px 30px;
+    border-radius: 6px; /* Reduced from 8px */
+    padding: 10px 18px; /* Reduced from 15px 25px */
     box-shadow: 
         0 0 20px #00ffff,
         inset 0 0 20px rgba(0, 255, 255, 0.1);
@@ -834,7 +834,10 @@ body, html {
 /* Responsive design */
 @media (max-width: 768px) {
     .text-line {
-        font-size: 2.5rem;
+        font-size: 1.35rem; /* 2/3 of 2rem */
+        padding: 8px 14px; /* Reduced padding */
+        margin-bottom: 8px; /* Reduced margin */
+        letter-spacing: 0.7px; /* Reduced letter spacing */
     }
     
     .digital-text {
@@ -903,8 +906,11 @@ body, html {
 
 @media (max-width: 480px) {
     .text-line {
-        font-size: 1.8rem;
-        letter-spacing: 1px;
+        font-size: 1rem; /* 2/3 of 1.5rem */
+        letter-spacing: 0.3px; /* Reduced letter spacing */
+        padding: 7px 10px; /* Reduced padding */
+        margin-bottom: 7px; /* Reduced margin */
+        border-radius: 4px; /* Smaller border radius */
     }
     
     .digital-text {
