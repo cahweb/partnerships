@@ -58,10 +58,8 @@ class TronCircuitboard {
         // Setup hover functionality for visualization
         this.setupHoverHandling();
         
-        // Start line generation after a short delay
-        setTimeout(() => {
-            this.generateLines();
-        }, 500);
+        // Start line generation immediately since it now handles text timing internally
+        this.generateLines();
         
         // Setup new UI functionality
         this.setupNewUI();
@@ -308,105 +306,132 @@ class TronCircuitboard {
     }
     
     generateLines() {
-        let edgeCounter = 0; // To ensure even distribution
-        const interval = setInterval(() => {
-            if (this.lines.length >= this.maxLines) {
-                clearInterval(interval);
-                this.showText();
-                return;
-            }
-            
-            this.createRandomLine(edgeCounter % 4); // Pass the edge to use
-            edgeCounter++;
-        }, 200);
+        // Show text first, then generate lines that target it
+        this.showText();
+        
+        // Wait for text to be rendered, then generate lines
+        setTimeout(() => {
+            let edgeCounter = 0; // To ensure even distribution
+            const interval = setInterval(() => {
+                if (this.lines.length >= this.maxLines) {
+                    clearInterval(interval);
+                    return;
+                }
+                
+                this.createRandomLine(edgeCounter % 4); // Pass the edge to use
+                edgeCounter++;
+            }, 200);
+        }, 2000); // Wait 2 seconds for text animation to complete
     }
     
+    getTextBoundaries() {
+        const collegeText = document.getElementById('collegeText');
+        
+        // Default fallback boundaries (more conservative)
+        let textBounds = {
+            left: this.canvas.width * 0.15,
+            right: this.canvas.width * 0.85,
+            top: this.canvas.height * 0.4,
+            bottom: this.canvas.height * 0.6
+        };
+        
+        // If the element exists and is visible, get its actual bounds
+        if (collegeText && collegeText.offsetWidth > 0) {
+            const rect = collegeText.getBoundingClientRect();
+            const canvasRect = this.canvas.getBoundingClientRect();
+            
+            // No padding - connect directly to border edges
+            textBounds = {
+                left: rect.left - canvasRect.left,
+                right: rect.right - canvasRect.left,
+                top: rect.top - canvasRect.top,
+                bottom: rect.bottom - canvasRect.top
+            };
+            
+            // Ensure bounds are within canvas
+            textBounds.left = Math.max(0, textBounds.left);
+            textBounds.right = Math.min(this.canvas.width, textBounds.right);
+            textBounds.top = Math.max(0, textBounds.top);
+            textBounds.bottom = Math.min(this.canvas.height, textBounds.bottom);
+        }
+        
+        return textBounds;
+    }
+
     createRandomLine(forcedEdge = null) {
-        // Get the approximate center area where the title appears
-        const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2;
+        // Get accurate text boundaries
+        const textBounds = this.getTextBoundaries();
         
         // Choose edge - use forced edge for even distribution, or random
         const edge = forcedEdge !== null ? forcedEdge : Math.floor(Math.random() * 4);
         let startPoint, straightEndPoint, curveEndPoint;
         
-        // Limit penetration to 40% of window dimensions
-        const maxPenetrationWidth = this.canvas.width * 0.4;
-        const maxPenetrationHeight = this.canvas.height * 0.4;
-        
         // Create straight segment length (20-40% of the way across screen)
         const straightLength = (0.2 + Math.random() * 0.2) * Math.min(this.canvas.width, this.canvas.height);
         
         switch(edge) {
-            case 0: // Top edge - start horizontal, then curve down
+            case 0: // Top edge - start horizontal, then curve down toward text box
                 startPoint = {
                     x: Math.random() * this.canvas.width,
                     y: -this.grid * 2 // Start offscreen
                 };
-                // Straight segment goes down
+                // Straight segment goes down, but stops well before the text box
                 straightEndPoint = {
                     x: startPoint.x,
-                    y: Math.min(startPoint.y + straightLength, maxPenetrationHeight)
+                    y: Math.min(startPoint.y + straightLength, textBounds.top - this.grid * 4)
                 };
-                // Curve toward center area, but limited by penetration
+                // Curve toward text box top edge, stopping at the boundary
                 curveEndPoint = {
-                    x: Math.max(maxPenetrationWidth, Math.min(this.canvas.width - maxPenetrationWidth, 
-                        centerX + (Math.random() - 0.5) * maxPenetrationWidth)),
-                    y: Math.min(straightEndPoint.y + this.grid * (2 + Math.floor(Math.random() * 4)), maxPenetrationHeight)
+                    x: textBounds.left + Math.random() * (textBounds.right - textBounds.left),
+                    y: textBounds.top
                 };
                 break;
-            case 1: // Right edge - start vertical, then curve left
+            case 1: // Right edge - start vertical, then curve left toward text box
                 startPoint = {
                     x: this.canvas.width + this.grid * 2, // Start offscreen
                     y: Math.random() * this.canvas.height
                 };
-                // Straight segment goes left
+                // Straight segment goes left, but stops well before the text box
                 straightEndPoint = {
-                    x: Math.max(startPoint.x - straightLength, this.canvas.width - maxPenetrationWidth),
+                    x: Math.max(startPoint.x - straightLength, textBounds.right + this.grid * 4),
                     y: startPoint.y
                 };
-                // Curve toward center area, but limited by penetration
+                // Curve toward text box right edge, stopping at the boundary
                 curveEndPoint = {
-                    x: Math.max(straightEndPoint.x - this.grid * (2 + Math.floor(Math.random() * 4)), 
-                        this.canvas.width - maxPenetrationWidth),
-                    y: Math.max(maxPenetrationHeight, Math.min(this.canvas.height - maxPenetrationHeight,
-                        centerY + (Math.random() - 0.5) * maxPenetrationHeight))
+                    x: textBounds.right,
+                    y: textBounds.top + Math.random() * (textBounds.bottom - textBounds.top)
                 };
                 break;
-            case 2: // Bottom edge - start horizontal, then curve up
+            case 2: // Bottom edge - start horizontal, then curve up toward text box
                 startPoint = {
                     x: Math.random() * this.canvas.width,
                     y: this.canvas.height + this.grid * 2 // Start offscreen
                 };
-                // Straight segment goes up
+                // Straight segment goes up, but stops well before the text box
                 straightEndPoint = {
                     x: startPoint.x,
-                    y: Math.max(startPoint.y - straightLength, this.canvas.height - maxPenetrationHeight)
+                    y: Math.max(startPoint.y - straightLength, textBounds.bottom + this.grid * 4)
                 };
-                // Curve toward center area, but limited by penetration
+                // Curve toward text box bottom edge, stopping at the boundary
                 curveEndPoint = {
-                    x: Math.max(maxPenetrationWidth, Math.min(this.canvas.width - maxPenetrationWidth,
-                        centerX + (Math.random() - 0.5) * maxPenetrationWidth)),
-                    y: Math.max(straightEndPoint.y - this.grid * (2 + Math.floor(Math.random() * 4)), 
-                        this.canvas.height - maxPenetrationHeight)
+                    x: textBounds.left + Math.random() * (textBounds.right - textBounds.left),
+                    y: textBounds.bottom
                 };
                 break;
-            case 3: // Left edge - start vertical, then curve right
+            case 3: // Left edge - start vertical, then curve right toward text box
                 startPoint = {
                     x: -this.grid * 2, // Start offscreen
                     y: Math.random() * this.canvas.height
                 };
-                // Straight segment goes right
+                // Straight segment goes right, but stops well before the text box
                 straightEndPoint = {
-                    x: Math.min(startPoint.x + straightLength, maxPenetrationWidth),
+                    x: Math.min(startPoint.x + straightLength, textBounds.left - this.grid * 4),
                     y: startPoint.y
                 };
-                // Curve toward center area, but limited by penetration
+                // Curve toward text box left edge, stopping at the boundary
                 curveEndPoint = {
-                    x: Math.min(straightEndPoint.x + this.grid * (2 + Math.floor(Math.random() * 4)), 
-                        maxPenetrationWidth),
-                    y: Math.max(maxPenetrationHeight, Math.min(this.canvas.height - maxPenetrationHeight,
-                        centerY + (Math.random() - 0.5) * maxPenetrationHeight))
+                    x: textBounds.left,
+                    y: textBounds.top + Math.random() * (textBounds.bottom - textBounds.top)
                 };
                 break;
         }
@@ -434,6 +459,9 @@ class TronCircuitboard {
     }
     
     createBranch(parentLine) {
+        // Get accurate text boundaries
+        const textBounds = this.getTextBoundaries();
+        
         // Calculate branch point on the straight segment only (50-80% along straight segment)
         const branchPoint = 0.5 + Math.random() * 0.3;
         const branchStart = {
@@ -449,22 +477,29 @@ class TronCircuitboard {
         
         // Branch at +/- 30 degrees (π/6 radians) from the straight segment
         const branchAngle = parentDirection + (Math.random() < 0.5 ? Math.PI/6 : -Math.PI/6);
-        const branchLength = this.grid * (2 + Math.floor(Math.random() * 4)); // Shorter branches to respect penetration limits
-        
-        // Apply penetration limits to branch endpoints
-        const maxPenetrationWidth = this.canvas.width * 0.4;
-        const maxPenetrationHeight = this.canvas.height * 0.4;
+        const branchLength = this.grid * (2 + Math.floor(Math.random() * 3)); // Shorter branches
         
         let branchEnd = {
             x: branchStart.x + Math.cos(branchAngle) * branchLength,
             y: branchStart.y + Math.sin(branchAngle) * branchLength
         };
         
-        // Ensure branch respects penetration limits
-        branchEnd.x = Math.max(maxPenetrationWidth, 
-                     Math.min(this.canvas.width - maxPenetrationWidth, branchEnd.x));
-        branchEnd.y = Math.max(maxPenetrationHeight, 
-                     Math.min(this.canvas.height - maxPenetrationHeight, branchEnd.y));
+        // Ensure branch doesn't penetrate the text box area
+        if (branchEnd.x > textBounds.left && branchEnd.x < textBounds.right &&
+            branchEnd.y > textBounds.top && branchEnd.y < textBounds.bottom) {
+            // Redirect branch to nearest text box edge
+            const distToLeft = Math.abs(branchEnd.x - textBounds.left);
+            const distToRight = Math.abs(branchEnd.x - textBounds.right);
+            const distToTop = Math.abs(branchEnd.y - textBounds.top);
+            const distToBottom = Math.abs(branchEnd.y - textBounds.bottom);
+            
+            const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+            
+            if (minDist === distToLeft) branchEnd.x = textBounds.left;
+            else if (minDist === distToRight) branchEnd.x = textBounds.right;
+            else if (minDist === distToTop) branchEnd.y = textBounds.top;
+            else branchEnd.y = textBounds.bottom;
+        }
         
         // Calculate the progress along the parent line where branching occurs
         const straightDistance = Math.sqrt(
@@ -736,70 +771,55 @@ class TronCircuitboard {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
         
-        // Position nodes in a more intentional circular pattern around the center
+        // Position nodes in oval arrangement: 2-3-3-2 pattern
         const totalNodes = this.departmentNames.length;
-        const baseRadius = Math.min(this.canvas.width, this.canvas.height) * 0.35; // Increased radius
         
-        // Calculate angle for this node with even distribution
-        const angle = (index / totalNodes) * 2 * Math.PI;
+        // Define the 4 rows with different node counts
+        let rowConfig, positionInRow, rowY;
         
-        // Add slight variation to avoid perfect rigidity, but keep it controlled
-        const radiusVariation = 30; // Reduced variation for more even distribution
-        const angleVariation = (Math.PI / totalNodes) * 0.3; // Small angle variation
-        
-        const finalRadius = baseRadius + (Math.random() - 0.5) * radiusVariation;
-        const finalAngle = angle + (Math.random() - 0.5) * angleVariation;
-        
-        // Calculate initial position
-        let x = centerX + Math.cos(finalAngle) * finalRadius;
-        let y = centerY + Math.sin(finalAngle) * finalRadius;
-        
-        // Ensure nodes stay within screen bounds with proper margins
-        const margin = 20;
-        x = Math.max(margin, Math.min(x, this.canvas.width - nodeWidth - margin));
-        y = Math.max(margin, Math.min(y, this.canvas.height - nodeHeight - margin));
-        
-        // Add extra padding around text area
-        const textPadding = 100; // Increased padding for better spacing
-        const textArea = {
-            left: textRect.left - textPadding,
-            right: textRect.right + textPadding,
-            top: textRect.top - textPadding,
-            bottom: textRect.bottom + textPadding
-        };
-        
-        // If overlapping with text, push node away from center
-        if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textArea)) {
-            // Push away from center text along the same angle
-            const pushDistance = Math.max(
-                (textArea.right - textArea.left) / 2 + 80, // Increased push distance
-                (textArea.bottom - textArea.top) / 2 + 80
-            );
-            
-            x = centerX + Math.cos(finalAngle) * pushDistance;
-            y = centerY + Math.sin(finalAngle) * pushDistance;
-            
-            // Ensure still within bounds
-            x = Math.max(margin, Math.min(x, this.canvas.width - nodeWidth - margin));
-            y = Math.max(margin, Math.min(y, this.canvas.height - nodeHeight - margin));
+        if (index < 2) {
+            // Top row: 2 nodes
+            rowConfig = { nodesInRow: 2, rowIndex: 0 };
+            positionInRow = index;
+            rowY = this.canvas.height * 0.08;
+        } else if (index < 5) {
+            // Second row: 3 nodes
+            rowConfig = { nodesInRow: 3, rowIndex: 1 };
+            positionInRow = index - 2;
+            rowY = this.canvas.height * 0.25;
+        } else if (index < 8) {
+            // Third row: 3 nodes (under CAH title)
+            rowConfig = { nodesInRow: 3, rowIndex: 2 };
+            positionInRow = index - 5;
+            rowY = this.canvas.height * 0.75;
+        } else {
+            // Bottom row: 2 nodes
+            rowConfig = { nodesInRow: 2, rowIndex: 3 };
+            positionInRow = index - 8;
+            rowY = this.canvas.height * 0.92;
         }
         
-        // Check for overlap with existing nodes and adjust if needed
-        let attempts = 0;
-        const maxAttempts = 15; // Reduced attempts since we have better initial positioning
-        while (attempts < maxAttempts && this.overlapsWithExistingNodes(x, y, nodeWidth, nodeHeight)) {
-            // Make smaller adjustments to maintain even distribution
-            const adjustAngle = finalAngle + (Math.random() - 0.5) * (Math.PI / 6); // Smaller angle adjustment
-            const adjustDistance = 40; // Smaller distance adjustment
-            x += Math.cos(adjustAngle) * adjustDistance;
-            y += Math.sin(adjustAngle) * adjustDistance;
-            
-            // Keep within bounds
-            x = Math.max(margin, Math.min(x, this.canvas.width - nodeWidth - margin));
-            y = Math.max(margin, Math.min(y, this.canvas.height - nodeHeight - margin));
-            
-            attempts++;
+        // Calculate horizontal spacing for this row
+        const horizontalMargin = 100; // Extra margin for oval shape
+        const availableWidth = this.canvas.width - (2 * horizontalMargin);
+        
+        let x;
+        if (rowConfig.nodesInRow === 1) {
+            // Center single node
+            x = this.canvas.width / 2;
+        } else {
+            // Space multiple nodes evenly
+            const spacing = availableWidth / (rowConfig.nodesInRow - 1);
+            x = horizontalMargin + (positionInRow * spacing);
         }
+        
+        // Center the node on its calculated position
+        x = x - (nodeWidth / 2);
+        let y = rowY - (nodeHeight / 2);
+        
+        // Ensure nodes stay fully on screen
+        x = Math.max(15, Math.min(x, this.canvas.width - nodeWidth - 15));
+        y = Math.max(15, Math.min(y, this.canvas.height - nodeHeight - 15));
         
         // Set final position
         node.style.left = x + 'px';

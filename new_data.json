@@ -4,13 +4,14 @@
       "id": "college-of-arts-and-humanities",
       "name": "College of Arts and Humanities",
       "image": "cah.jpg",
-      "spotlight": "https://cah.ucf.edu/spotlight/2024-25/",
+      "spotlight": "https://cah.ucf.edu/spotlight/",
       "degrees": [
         "Texts and Technology PhD",
         "Themed Experience MS"
       ],
       "internalPartners": [
-        "Center for Humanities and Digital Research (CHDR)"
+        "Center for Humanities and Digital Research (CHDR)",
+        "LIFE at UCF"
       ],
       "externalPartners": [
         "U.S. Department of Veterans Affairs/National Cemetery Administration",
@@ -98,7 +99,8 @@
         "Orlando Family Stage",
         "Orlando Shakes",
         "UCF Opera Board",
-        "Theatre Professional Advisory Board"
+        "Theatre Professional Advisory Board",
+        "OUC (support of UCF Celebrates the Arts)"
       ],
       "highlights": [
         {
@@ -158,7 +160,23 @@
       ],
       "externalPartners": [
         "Limbitless Solutions",
+        "Universal Creative",
+        "Boss Laser",
+        "Mattamy Homes",
+        "American Outlaws and U.S. Women's Soccer Teams",
+        "CreateX paints",
+        "Microsoft",
+        "Riot Games",
+        "Stratasys",
+        "Pearson Certiport",
+        "Adobe",
+        "Autodesk",
+        "Wacom",
+        "Disney",
+        "Ubisoft Games",
+        "AIGA",
         "Atlantic Center for the Arts",
+        "Orlando Science Center",
         "Valencia College and University of Florida (Architecture 2+2+2)"
       ],
       "highlights": [
@@ -271,13 +289,20 @@
         "History MA: Public History"
       ],
       "internalPartners": [
-        "Study abroad opportunities with UCF Abroad"
+        "Study abroad opportunities with UCF Abroad",
+        "Florida Prison Education Project",
+        "RICHES: Podcast Documentaries Collection"
       ],
       "externalPartners": [
         "Florida Prison Education Project",
         "ChronoPoints Laser Scanning",
         "RICHES: Podcast Documentaries Collection",
-        "Florida Historical Quarterly: Podcast Project"
+        "Florida Historical Quarterly: Podcast Project",
+        "National Historical Publications and Records Commission",
+        "National Archives",
+        "U.S. National Science Foundation",
+        "Johns Hopkins University",
+        "Kurd Qaburstan Project"
       ],
       "highlights": [
         {
@@ -409,7 +434,9 @@
         "Stylus Journal",
         "Convergence Rhetoric: Journal of Undergraduate Research"
       ],
-      "externalPartners": [],
+      "externalPartners": [
+        "Ah-Tah-Thi-Ki Museum"
+      ],
       "highlights": [
         {
           "title": "Writing Across the Curriculum",
@@ -467,7 +494,8 @@
         {
           "title": "Electronic Literature Organization Conference and Media Arts Festival",
           "url": "https://stars.library.ucf.edu/elo2024/"
-        },{
+        },
+        {
           "title": "ELLE EndLess LEarner",
           "url": "https://chdr.cs.ucf.edu/elle/home"
         },
@@ -529,8 +557,13 @@
       "degrees": [
         "Gender Studies Certificate"
       ],
-      "internalPartners": [],
-      "externalPartners": [],
+      "internalPartners": [
+        "Science Leadership and Mentoring program partners with STEM colleges at UCF",
+        "interdisciplinary faculty comes from units across UCF"
+      ],
+      "externalPartners": [
+        "Farmworker Association of Florida"
+      ],
       "highlights": [
         {
           "title": "SLAM - Science Leadership and Mentoring",
