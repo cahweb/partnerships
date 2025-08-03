@@ -1482,28 +1482,35 @@ class TronCircuitboard {
     }
 
     findOptimalLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
-        // Increase attempts for departments with many nodes like SVAD
-        const baseAttempts = 1000;
-        const extraAttemptsPerNode = 100; // Add more attempts for complex layouts
-        const maxAttempts = Math.min(baseAttempts + (nodesToPlace.length * extraAttemptsPerNode), 3000);
+        // Get current department name for specific handling
+        const currentDept = this.vizNodes.find(n => n.type === 'central');
+        const isComplexDept = currentDept && (
+            currentDept.name.includes('Visual Arts') || 
+            currentDept.name.includes('Performing Arts')
+        );
+        
+        // Increase attempts for departments with many nodes like SVAD and complex departments
+        const baseAttempts = isComplexDept ? 1500 : 1000; // More attempts for complex departments
+        const extraAttemptsPerNode = isComplexDept ? 150 : 100; // More attempts per node
+        const maxAttempts = Math.min(baseAttempts + (nodesToPlace.length * extraAttemptsPerNode), isComplexDept ? 4000 : 3000);
         
         let bestScore = -Infinity;
         let bestLayout = null;
         
-        // Adjust target score based on node count - more nodes need better scores
-        const targetScore = nodesToPlace.length * 1.5; // Increased threshold for better layouts
+        // Adjust target score based on node count and complexity
+        const targetScore = nodesToPlace.length * (isComplexDept ? 2.0 : 1.5); // Higher threshold for complex departments
         
-        console.log(`Finding optimal layout for ${nodesToPlace.length} nodes with ${maxAttempts} attempts...`);
+        console.log(`Finding optimal layout for ${nodesToPlace.length} nodes with ${maxAttempts} attempts (Complex: ${isComplexDept})...`);
         
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const layout = this.generateRandomLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY);
-            const score = this.scoreLayout(layout, canvasWidth, canvasHeight);
+            const score = this.scoreLayout(layout, canvasWidth, canvasHeight, isComplexDept);
             
             if (score > bestScore) {
                 bestScore = score;
                 bestLayout = [...layout]; // Deep copy
                 
-                // Early termination for good solutions, but be more selective
+                // Early termination for good solutions, but be more selective for complex departments
                 if (score >= targetScore) {
                     console.log(`Good solution found (score: ${score.toFixed(2)}) at attempt ${attempt}`);
                     break;
@@ -1516,7 +1523,7 @@ class TronCircuitboard {
             }
         }
         
-        console.log(`Final best score: ${bestScore.toFixed(2)} for ${nodesToPlace.length} nodes`);
+        console.log(`Final best score: ${bestScore.toFixed(2)} for ${nodesToPlace.length} nodes (Complex: ${isComplexDept})`);
         
         // Apply best layout
         if (bestLayout) {
@@ -1533,17 +1540,37 @@ class TronCircuitboard {
     generateRandomLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
         const layout = [];
         const margin = 60; // Increased margin to ensure content stays on screen
+        
+        // Calculate legend exclusion zone (bottom-right corner)
+        const legendWidth = 200; // Estimated width including padding
+        const legendHeight = 180; // Estimated height including padding  
+        const legendMargin = 40; // Extra margin around legend for safety
+        
+        const legendExclusionZone = {
+            left: canvasWidth - legendWidth - legendMargin,
+            right: canvasWidth,
+            top: canvasHeight - legendHeight - legendMargin,
+            bottom: canvasHeight
+        };
+        
         const usableWidth = canvasWidth - (margin * 2);
         const usableHeight = canvasHeight - (margin * 2);
         const maxRadius = Math.min(usableWidth, usableHeight) / 2;
         
-        // Use more conservative vertical space to stay within bounds
-        const verticalSpread = canvasHeight * 0.5; // Reduced from 70% to 50% to stay in bounds
-        const horizontalSpread = canvasWidth * 0.45; // Reduced from 60% to 45%
+        // Check if this is a complex department that needs more horizontal spread
+        const currentDept = this.vizNodes.find(n => n.type === 'central');
+        const isComplexDept = currentDept && (
+            currentDept.name.includes('Visual Arts') || 
+            currentDept.name.includes('Performing Arts')
+        );
+        
+        // Use more aggressive horizontal spread for complex departments with many nodes
+        const verticalSpread = canvasHeight * (isComplexDept ? 0.6 : 0.5);
+        const horizontalSpread = canvasWidth * (isComplexDept ? 0.7 : 0.45); // Much wider for complex departments
         
         // Use staggered radial approach with controlled line lengths
         const totalNodes = nodesToPlace.length;
-        const sectors = Math.max(12, Math.ceil(totalNodes / 1.5)); // More sectors for better distribution
+        const sectors = Math.max(isComplexDept ? 16 : 12, Math.ceil(totalNodes / 1.2)); // More sectors for complex departments
         const angleStep = (Math.PI * 2) / sectors;
         
         // Group nodes by type for better organization
@@ -1553,25 +1580,25 @@ class TronCircuitboard {
             'external': nodesToPlace.filter(n => n.type === 'external')
         };
         
-        // Define more conservative radius ranges that stay within bounds
+        // Define radius ranges with much wider spread for complex departments
         const radiusRanges = {
             'degree': { 
                 min: maxRadius * 0.4, 
-                max: maxRadius * 0.85, // Reduced from 1.1 to stay in bounds
-                verticalTier: -verticalSpread * 0.2, // Reduced from 0.25
-                tierVariation: verticalSpread * 0.1 // Reduced variation
+                max: maxRadius * (isComplexDept ? 1.2 : 0.85), // Much wider for complex departments
+                verticalTier: -verticalSpread * 0.2,
+                tierVariation: verticalSpread * (isComplexDept ? 0.15 : 0.1)
             },
             'internal': { 
                 min: maxRadius * 0.5, 
-                max: maxRadius * 0.9, // Reduced from 1.2
-                verticalTier: 0, // Middle tier stays the same
-                tierVariation: verticalSpread * 0.08
+                max: maxRadius * (isComplexDept ? 1.4 : 0.9), // Much wider for complex departments
+                verticalTier: 0,
+                tierVariation: verticalSpread * (isComplexDept ? 0.12 : 0.08)
             },
             'external': { 
                 min: maxRadius * 0.6, 
-                max: maxRadius * 0.95, // Reduced from 1.3
-                verticalTier: verticalSpread * 0.2, // Reduced from 0.25
-                tierVariation: verticalSpread * 0.1
+                max: maxRadius * (isComplexDept ? 1.6 : 0.95), // Much wider for complex departments
+                verticalTier: verticalSpread * 0.2,
+                tierVariation: verticalSpread * (isComplexDept ? 0.15 : 0.1)
             }
         };
         
@@ -1583,25 +1610,28 @@ class TronCircuitboard {
                 const range = radiusRanges[nodeType];
                 
                 // Create 4 distinct radius tiers within each type for line length variety
-                const radiusTier = (typeIndex % 4) * 0.15; // Reduced from 0.2
+                const radiusTier = (typeIndex % 4) * (isComplexDept ? 0.2 : 0.15); // More variation for complex departments
                 const baseRadius = range.min + (range.max - range.min) * (0.2 + radiusTier);
                 
-                // Add controlled randomness but keep structure
-                const radius = baseRadius + (Math.random() - 0.5) * maxRadius * 0.08; // Reduced randomness
+                // Add more randomness for complex departments to spread them out
+                const randomnessMultiplier = isComplexDept ? 0.15 : 0.08;
+                const radius = baseRadius + (Math.random() - 0.5) * maxRadius * randomnessMultiplier;
                 
-                // Use sector-based angles with controlled variation
+                // Use sector-based angles with more variation for complex departments
                 const baseSector = (sectorIndex % sectors);
                 const baseAngle = baseSector * angleStep;
-                const angleVariation = (Math.random() - 0.5) * angleStep * 0.6; // Reduced from 0.8
+                const angleVariationMultiplier = isComplexDept ? 0.8 : 0.6;
+                const angleVariation = (Math.random() - 0.5) * angleStep * angleVariationMultiplier;
                 const angle = baseAngle + angleVariation;
                 
                 // Calculate base position
                 const baseX = centerX + Math.cos(angle) * radius;
                 const baseY = centerY + Math.sin(angle) * radius;
                 
-                // Apply vertical tier positioning with controlled staggering
+                // Apply vertical tier positioning with more staggering for complex departments
                 const tierOffset = range.verticalTier + (typeIndex % 3 - 1) * range.tierVariation;
-                const horizontalJitter = (typeIndex % 5 - 2) * (horizontalSpread * 0.03); // Reduced jitter
+                const horizontalJitterMultiplier = isComplexDept ? 0.08 : 0.03; // Much more horizontal jitter for complex departments
+                const horizontalJitter = (typeIndex % 7 - 3) * (horizontalSpread * horizontalJitterMultiplier); // More variation points
                 
                 const x = baseX + horizontalJitter;
                 const y = baseY + tierOffset;
@@ -1613,8 +1643,8 @@ class TronCircuitboard {
                     ...nodeTemplate,
                     x: boundedPos.x,
                     y: boundedPos.y,
-                    textWidth: this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type),
-                    textHeight: this.estimateTextHeight(nodeTemplate.name, nodeTemplate.type)
+                    textWidth: this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type, isComplexDept),
+                    textHeight: this.estimateTextHeight(nodeTemplate.name, nodeTemplate.type, isComplexDept)
                 });
                 
                 sectorIndex++;
@@ -1628,6 +1658,13 @@ class TronCircuitboard {
         console.log('Creating fallback layout for', nodesToPlace.length, 'nodes');
         const margin = 80;
         const maxRadius = Math.min(canvasWidth - margin * 2, canvasHeight - margin * 2) / 2;
+        
+        // Check if this is a complex department for smaller text
+        const currentDept = this.vizNodes.find(n => n.type === 'central');
+        const isComplexDept = currentDept && (
+            currentDept.name.includes('Visual Arts') || 
+            currentDept.name.includes('Performing Arts')
+        );
         
         // Simple circular layout as fallback
         nodesToPlace.forEach((nodeTemplate, index) => {
@@ -1644,13 +1681,13 @@ class TronCircuitboard {
                 ...nodeTemplate,
                 x: boundedPos.x,
                 y: boundedPos.y,
-                textWidth: this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type),
-                textHeight: this.estimateTextHeight(nodeTemplate.name, nodeTemplate.type)
+                textWidth: this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type, isComplexDept),
+                textHeight: this.estimateTextHeight(nodeTemplate.name, nodeTemplate.type, isComplexDept)
             });
         });
     }
 
-    scoreLayout(layout, canvasWidth, canvasHeight) {
+    scoreLayout(layout, canvasWidth, canvasHeight, isComplexDept = false) {
         let score = 2000; // Start with higher base score
         
         // Center coordinates for line intersection checks
@@ -1671,30 +1708,31 @@ class TronCircuitboard {
             const nodeA = layout[i];
             
             // Check text boundaries with increased buffer
-            const textBounds = this.getTextBounds(nodeA);
+            const textBounds = this.getTextBounds(nodeA, isComplexDept);
             
-            // Penalty for being too close to edges (balanced to use space while staying in bounds)
-            const edgeMargin = 50; // Increased from 30 to match our layout margin
-            if (textBounds.left < edgeMargin) score -= 120;
-            if (textBounds.right > canvasWidth - edgeMargin) score -= 120;
-            if (textBounds.top < edgeMargin) score -= 120;
-            if (textBounds.bottom > canvasHeight - edgeMargin) score -= 120;
+            // Penalty for being too close to edges - more lenient for complex departments
+            const edgeMargin = isComplexDept ? 35 : 50; // Smaller margin for complex departments
+            const edgePenalty = isComplexDept ? 80 : 120; // Lower penalty for complex departments
+            if (textBounds.left < edgeMargin) score -= edgePenalty;
+            if (textBounds.right > canvasWidth - edgeMargin) score -= edgePenalty;
+            if (textBounds.top < edgeMargin) score -= edgePenalty;
+            if (textBounds.bottom > canvasHeight - edgeMargin) score -= edgePenalty;
             
             // CRITICAL: Prevent overlap with central node
-            const centralOverlapPenalty = this.calculateTextOverlapPenalty(nodeA, centralNode);
+            const centralOverlapPenalty = this.calculateTextOverlapPenalty(nodeA, centralNode, isComplexDept);
             score -= centralOverlapPenalty * 10; // Massive penalty for central overlap
             
             // CRITICAL: Prevent text overlap between nodes
             for (let j = i + 1; j < layout.length; j++) {
                 const nodeB = layout[j];
-                const textOverlapPenalty = this.calculateTextOverlapPenalty(nodeA, nodeB);
-                score -= textOverlapPenalty * 8; // Severe penalty for text overlap
+                const textOverlapPenalty = this.calculateTextOverlapPenalty(nodeA, nodeB, isComplexDept);
+                score -= textOverlapPenalty * (isComplexDept ? 12 : 8); // More severe penalty for complex departments
                 
                 // Additional penalty for nodes being too close (visual clustering)
                 const distance = Math.sqrt(Math.pow(nodeA.x - nodeB.x, 2) + Math.pow(nodeA.y - nodeB.y, 2));
-                const minDistance = 80; // Minimum distance between node centers
+                const minDistance = isComplexDept ? 90 : 80; // Increased minimum distance for complex departments
                 if (distance < minDistance) {
-                    score -= (minDistance - distance) * 2;
+                    score -= (minDistance - distance) * (isComplexDept ? 3 : 2); // Higher penalty for complex departments
                 }
             }
             
@@ -1706,21 +1744,64 @@ class TronCircuitboard {
             // Reward appropriate distances with staggered bonus
             score += Math.max(0, 30 - distanceDiff * 0.2);
             
-            // Bonus for using the full canvas space effectively
+            // Bonus for using the full canvas space effectively - higher bonus for complex departments
             if (distanceFromCenter > idealDistance * 0.8) {
-                score += 20; // Reward nodes that use outer space
+                score += isComplexDept ? 35 : 20; // Higher reward for complex departments using outer space
+            }
+            
+            // Additional bonus for complex departments that spread horizontally
+            if (isComplexDept) {
+                const horizontalDistanceFromCenter = Math.abs(nodeA.x - centerX);
+                const canvasHalfWidth = canvasWidth / 2;
+                if (horizontalDistanceFromCenter > canvasHalfWidth * 0.6) {
+                    score += 25; // Reward horizontal spread
+                }
             }
         }
         
         return score;
     }
     
-    calculateTextOverlapPenalty(nodeA, nodeB) {
-        const boundsA = this.getTextBounds(nodeA);
-        const boundsB = this.getTextBounds(nodeB);
+    // Helper function to get font size based on department complexity
+    getFontSize(nodeType, isComplexDept = false) {
+        if (nodeType === 'central') {
+            return isComplexDept ? '20px' : '22px';
+        }
+        return isComplexDept ? '15px' : '17px';
+    }
+    
+    // Helper function to check if current department is complex
+    isComplexDepartment() {
+        const currentDept = this.vizNodes.find(n => n.type === 'central');
+        return currentDept && (
+            currentDept.name.includes('Visual Arts') || 
+            currentDept.name.includes('Performing Arts')
+        );
+    }
+    
+    isPositionInLegendZone(x, y, width = 0, height = 0) {
+        const canvasWidth = this.vizCanvas.width;
+        const canvasHeight = this.vizCanvas.height;
+        const legendZone = {
+            x: canvasWidth - 240, // 200px width + 40px margin
+            y: canvasHeight - 220, // 180px height + 40px margin
+            width: 240,
+            height: 220
+        };
         
-        // Add larger buffer around text to ensure readability
-        const textBuffer = 50; // Increased from 35 to 50 for even better text spacing
+        // Check if the position (with optional width/height) intersects legend zone
+        return (x < legendZone.x + legendZone.width && 
+                x + width > legendZone.x && 
+                y < legendZone.y + legendZone.height && 
+                y + height > legendZone.y);
+    }
+    
+    calculateTextOverlapPenalty(nodeA, nodeB, isComplexDept = false) {
+        const boundsA = this.getTextBounds(nodeA, isComplexDept);
+        const boundsB = this.getTextBounds(nodeB, isComplexDept);
+        
+        // Add larger buffer around text to ensure readability - more for complex departments
+        const textBuffer = isComplexDept ? 60 : 50; // Increased buffer for complex departments
         
         const expandedBoundsA = {
             left: boundsA.left - textBuffer,
@@ -1743,7 +1824,8 @@ class TronCircuitboard {
         
         if (overlapLeft < overlapRight && overlapTop < overlapBottom) {
             const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
-            return overlapArea * 15; // MUCH heavier penalty for overlap - was 8, now 15
+            // Much heavier penalty for complex departments
+            return overlapArea * (isComplexDept ? 20 : 15); 
         }
         
         // Check if node circles are too close (node visual overlap)
@@ -1753,20 +1835,20 @@ class TronCircuitboard {
         
         const nodeRadiusA = nodeA.radius || 10;
         const nodeRadiusB = nodeB.radius || 10;
-        const minNodeDistance = nodeRadiusA + nodeRadiusB + 40; // Increased minimum distance
+        const minNodeDistance = nodeRadiusA + nodeRadiusB + (isComplexDept ? 50 : 40); // Increased minimum distance for complex departments
         
         if (nodeDistance < minNodeDistance) {
-            return (minNodeDistance - nodeDistance) * 25; // Increased penalty - was 15, now 25
+            return (minNodeDistance - nodeDistance) * (isComplexDept ? 35 : 25); // Higher penalty for complex departments
         }
         
-        // Additional penalty for text being too close (even without overlap)
+        // Additional penalty for text being too close (even without overlap) - enhanced for complex departments
         const centerDistance = Math.sqrt(
             Math.pow(nodeA.x - nodeB.x, 2) + Math.pow(nodeA.y - nodeB.y, 2)
         );
         
-        const minSafeDistance = (nodeA.textWidth + nodeB.textWidth) / 2 + 80; // Increased safe distance
+        const minSafeDistance = (nodeA.textWidth + nodeB.textWidth) / 2 + (isComplexDept ? 100 : 80); // Increased safe distance for complex departments
         if (centerDistance < minSafeDistance) {
-            return (minSafeDistance - centerDistance) * 12; // Increased penalty - was 8, now 12
+            return (minSafeDistance - centerDistance) * (isComplexDept ? 15 : 12); // Higher penalty for complex departments
         }
         
         return 0;
@@ -1774,6 +1856,25 @@ class TronCircuitboard {
 
     calculateLineIntersectionPenalty(currentNode, allNodes, centerX, centerY) {
         let penalty = 0;
+        
+        // Check if the line intersects with the legend exclusion zone
+        const canvasWidth = this.vizCanvas.width;
+        const canvasHeight = this.vizCanvas.height;
+        const legendZone = {
+            x: canvasWidth - 240, // 200px width + 40px margin
+            y: canvasHeight - 220, // 180px height + 40px margin
+            width: 240,
+            height: 220
+        };
+        
+        // Check if line from center to current node intersects legend zone
+        if (this.lineIntersectsRectangle(
+            centerX, centerY, currentNode.x, currentNode.y,
+            legendZone.x, legendZone.y,
+            legendZone.x + legendZone.width, legendZone.y + legendZone.height
+        )) {
+            penalty += 2000; // Very heavy penalty for legend intersection
+        }
         
         // Check if the line from center to current node intersects with other nodes
         for (const otherNode of allNodes) {
@@ -1941,9 +2042,9 @@ class TronCircuitboard {
         return u1 <= u2;
     }
 
-    getTextBounds(node) {
-        const textWidth = node.textWidth || this.estimateTextWidth(node.name, node.type);
-        const textHeight = node.textHeight || this.estimateTextHeight(node.name, node.type);
+    getTextBounds(node, isComplexDept = false) {
+        const textWidth = node.textWidth || this.estimateTextWidth(node.name, node.type, isComplexDept);
+        const textHeight = node.textHeight || this.estimateTextHeight(node.name, node.type, isComplexDept);
         
         // Handle central node differently - it's centered at the node position
         if (node.type === 'central') {
@@ -2003,22 +2104,24 @@ class TronCircuitboard {
         };
     }
     
-    getWrappedLines(text, nodeType) {
+    getWrappedLines(text, nodeType, isComplexDept = false) {
         // Central nodes don't wrap - they're single line
         if (nodeType === 'central') {
             return [text];
         }
         
-        // Match the wrapping logic from rendering
-        const maxWidth = nodeType === 'degree' ? 110 : 70;
+        // Match the wrapping logic from rendering - smaller widths for complex departments
+        const maxWidth = nodeType === 'degree' ? 
+            (isComplexDept ? 95 : 110) : 
+            (isComplexDept ? 60 : 70);
         const words = text.split(' ');
         let line = '';
         let lines = [];
         
         for (let i = 0; i < words.length; i++) {
             const testLine = line + words[i] + ' ';
-            // Estimate text width (we can't measure without canvas context here)
-            const avgCharWidth = 10; // Approximate for 17px Orbitron
+            // Estimate text width - smaller for complex departments
+            const avgCharWidth = isComplexDept ? 8.5 : 10; // Smaller for 15px vs 17px
             const testWidth = testLine.length * avgCharWidth;
             
             if (testWidth > maxWidth && i > 0) {
@@ -2033,15 +2136,15 @@ class TronCircuitboard {
         return lines;
     }
 
-    estimateTextHeight(text, nodeType = 'degree') {
-        // Central nodes use single line 22px font
+    estimateTextHeight(text, nodeType = 'degree', isComplexDept = false) {
+        // Central nodes use single line font - smaller for complex departments
         if (nodeType === 'central') {
-            return 22; // Single line height for 22px font
+            return isComplexDept ? 20 : 22; // Smaller for complex departments
         }
         
         // Use the same wrapping logic as rendering to get accurate line count
-        const lines = this.getWrappedLines(text, nodeType);
-        const lineHeight = 15; // Match the rendering line height
+        const lines = this.getWrappedLines(text, nodeType, isComplexDept);
+        const lineHeight = isComplexDept ? 13 : 15; // Smaller line height for complex departments
         return lines.length * lineHeight;
     }
 
@@ -2094,22 +2197,24 @@ class TronCircuitboard {
         return (baseAngle * spacingFactor) + stagger;
     }
     
-    estimateTextWidth(text, nodeType = 'degree') {
+    estimateTextWidth(text, nodeType = 'degree', isComplexDept = false) {
         // Central nodes use 22px Orbitron bold and don't wrap
         if (nodeType === 'central') {
-            const avgCharWidth = 14; // Larger for 22px Orbitron bold
+            const avgCharWidth = isComplexDept ? 12 : 14; // Smaller for complex departments
             return text.length * avgCharWidth;
         }
         
-        // Match the actual wrapping widths used in rendering
-        const maxWidth = nodeType === 'degree' ? 110 : 70;
+        // Match the actual wrapping widths used in rendering - smaller for complex departments
+        const maxWidth = nodeType === 'degree' ? 
+            (isComplexDept ? 95 : 110) : 
+            (isComplexDept ? 60 : 70);
         
         // For multi-line text, use the max width constraint
-        const lines = this.getWrappedLines(text, nodeType);
+        const lines = this.getWrappedLines(text, nodeType, isComplexDept);
         let maxLineWidth = 0;
         
-        // Estimate each line's width more accurately for 17px Orbitron
-        const avgCharWidth = 10; // More accurate for 17px Orbitron bold
+        // Estimate each line's width - smaller text for complex departments
+        const avgCharWidth = isComplexDept ? 8.5 : 10; // Smaller for complex departments (15px vs 17px)
         for (const line of lines) {
             const lineWidth = line.trim().length * avgCharWidth;
             maxLineWidth = Math.max(maxLineWidth, lineWidth);
@@ -2120,9 +2225,41 @@ class TronCircuitboard {
     }
 
     ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin) {
-        // Ensure nodes stay within the canvas bounds with proper margins
-        const clampedX = Math.max(margin, Math.min(x, canvasWidth - margin));
-        const clampedY = Math.max(margin, Math.min(y, canvasHeight - margin));
+        // Check if this is a complex department that needs more space
+        const currentDept = this.vizNodes.find(n => n.type === 'central');
+        const isComplexDept = currentDept && (
+            currentDept.name.includes('Visual Arts') || 
+            currentDept.name.includes('Performing Arts')
+        );
+        
+        // Use smaller margins for complex departments to allow more spread
+        const effectiveMargin = isComplexDept ? margin * 0.7 : margin;
+        
+        // Define legend exclusion zone (bottom-right)
+        const legendZone = {
+            x: canvasWidth - 240, // 200px width + 40px margin
+            y: canvasHeight - 220, // 180px height + 40px margin
+            width: 240,
+            height: 220
+        };
+        
+        // First apply basic canvas bounds with adjusted margins
+        let clampedX = Math.max(effectiveMargin, Math.min(x, canvasWidth - effectiveMargin));
+        let clampedY = Math.max(effectiveMargin, Math.min(y, canvasHeight - effectiveMargin));
+        
+        // Check if position is in legend exclusion zone
+        if (clampedX + 50 > legendZone.x && clampedY + 30 > legendZone.y) {
+            // For complex departments, try more aggressive repositioning
+            const moveDistance = isComplexDept ? 150 : 100;
+            
+            // Try to move left first
+            if (clampedX - moveDistance >= effectiveMargin) {
+                clampedX = clampedX - moveDistance;
+            } else {
+                // Move up if can't move left
+                clampedY = Math.max(effectiveMargin, legendZone.y - (isComplexDept ? 80 : 50));
+            }
+        }
         
         return { x: clampedX, y: clampedY };
     }
@@ -2749,8 +2886,9 @@ class TronCircuitboard {
         
         // Set label color and styling based on node type
         if (node.type === 'central') {
-            // Central department name with blue outline (TRON style)
-            this.vizCtx.font = 'bold 22px Orbitron';
+            // Central department name with blue outline (TRON style) - smaller for complex departments
+            const isComplexDept = this.isComplexDepartment();
+            this.vizCtx.font = `bold ${this.getFontSize('central', isComplexDept)} Orbitron`;
             this.vizCtx.textAlign = 'center';
             this.vizCtx.textBaseline = 'middle';
             
@@ -2766,16 +2904,17 @@ class TronCircuitboard {
             this.vizCtx.shadowBlur = 0;
             this.vizCtx.fillText(node.name, node.x, node.y);
         } else if (node.type === 'degree') {
-            // Degree nodes with WHITE font for better readability - increased size
+            // Degree nodes with WHITE font for better readability - smaller for complex departments
+            const isComplexDept = this.isComplexDepartment();
             this.vizCtx.fillStyle = '#ffffff';  // White font for degrees
-            this.vizCtx.font = 'bold 17px Orbitron';  // Increased to match external partnerships
+            this.vizCtx.font = `bold ${this.getFontSize('degree', isComplexDept)} Orbitron`;
             this.vizCtx.shadowColor = '#000000';
             this.vizCtx.shadowBlur = 4;
             this.vizCtx.textAlign = 'center';
             this.vizCtx.textBaseline = 'middle';
             
-            // Wrap long text with better width management
-            const maxWidth = 110;  
+            // Wrap long text with better width management - smaller for complex departments
+            const maxWidth = isComplexDept ? 95 : 110;  
             const words = node.name.split(' ');
             let line = '';
             let lines = [];
@@ -2831,22 +2970,42 @@ class TronCircuitboard {
                 }
             }
             
+            // Check if text would be in legend zone and adjust
+            const textWidth = Math.max(...lines.map(line => this.vizCtx.measureText(line.trim()).width));
+            const textHeight = lines.length * lineHeight;
+            
+            if (this.isPositionInLegendZone(textX - textWidth/2, textY - textHeight/2, textWidth, textHeight)) {
+                // Try to move text up first
+                const newTextY = textY - 80;
+                if (newTextY > margin && !this.isPositionInLegendZone(textX - textWidth/2, newTextY - textHeight/2, textWidth, textHeight)) {
+                    textY = newTextY;
+                } else {
+                    // Try to move left
+                    const newTextX = textX - 120;
+                    if (newTextX > margin && !this.isPositionInLegendZone(newTextX - textWidth/2, textY - textHeight/2, textWidth, textHeight)) {
+                        textX = newTextX;
+                        this.vizCtx.textAlign = 'center';
+                    }
+                }
+            }
+            
             const startY = textY - (lines.length - 1) * lineHeight / 2;
             
             lines.forEach((line, index) => {
                 this.vizCtx.fillText(line.trim(), textX, startY + index * lineHeight);
             });
         } else if (node.type === 'degree-track') {
-            // Degree track nodes with white font - increased size
+            // Degree track nodes with white font - smaller for complex departments
+            const isComplexDept = this.isComplexDepartment();
             this.vizCtx.fillStyle = '#ffffff';  // White font for degree tracks too
-            this.vizCtx.font = '17px Orbitron';  // Increased to match external partnerships
+            this.vizCtx.font = `${this.getFontSize('degree-track', isComplexDept)} Orbitron`;
             this.vizCtx.shadowColor = '#000000';
             this.vizCtx.shadowBlur = 3;
             this.vizCtx.textAlign = 'center';
             this.vizCtx.textBaseline = 'middle';
             
-            // Wrap long text with smaller width to reduce overlap
-            const maxWidth = 70;  // Further reduced
+            // Wrap long text with smaller width to reduce overlap - even smaller for complex departments
+            const maxWidth = isComplexDept ? 60 : 70;
             const words = node.name.split(' ');
             let line = '';
             let lines = [];
@@ -2897,22 +3056,42 @@ class TronCircuitboard {
                 textY = node.y + node.radius + 20;
             }
             
+            // Check if text would be in legend zone and adjust
+            const textWidth = Math.max(...lines.map(line => this.vizCtx.measureText(line.trim()).width));
+            const textHeight = lines.length * lineHeight;
+            
+            if (this.isPositionInLegendZone(textX - textWidth/2, textY - textHeight/2, textWidth, textHeight)) {
+                // Try to move text up first
+                const newTextY = textY - 60;
+                if (newTextY > margin && !this.isPositionInLegendZone(textX - textWidth/2, newTextY - textHeight/2, textWidth, textHeight)) {
+                    textY = newTextY;
+                } else {
+                    // Try to move left
+                    const newTextX = textX - 100;
+                    if (newTextX > margin && !this.isPositionInLegendZone(newTextX - textWidth/2, textY - textHeight/2, textWidth, textHeight)) {
+                        textX = newTextX;
+                        this.vizCtx.textAlign = 'center';
+                    }
+                }
+            }
+            
             const startY = textY - (lines.length - 1) * lineHeight / 2;
             
             lines.forEach((line, index) => {
                 this.vizCtx.fillText(line.trim(), textX, startY + index * lineHeight);
             });
         } else if (node.type === 'internal') {
-            // Internal partner nodes with white font for consistency
+            // Internal partner nodes with white font for consistency - smaller for complex departments
+            const isComplexDept = this.isComplexDepartment();
             this.vizCtx.fillStyle = '#ffffff';  // White font for consistency
-            this.vizCtx.font = 'bold 17px Orbitron'; // Increased to match external partnerships
+            this.vizCtx.font = `bold ${this.getFontSize('internal', isComplexDept)} Orbitron`;
             this.vizCtx.shadowColor = '#000000';
             this.vizCtx.shadowBlur = 4;
             this.vizCtx.textAlign = 'center';
             this.vizCtx.textBaseline = 'middle';
             
-            // Wrap long text
-            const maxWidth = 150;
+            // Wrap long text - smaller width for complex departments
+            const maxWidth = isComplexDept ? 120 : 150;
             const words = node.name.split(' ');
             let line = '';
             let lines = [];
@@ -2938,16 +3117,17 @@ class TronCircuitboard {
                 this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
             });
         } else if (node.type === 'external') {
-            // External partner nodes with white font for consistency
+            // External partner nodes with white font for consistency - smaller for complex departments
+            const isComplexDept = this.isComplexDepartment();
             this.vizCtx.fillStyle = '#ffffff';  // White font for consistency
-            this.vizCtx.font = 'bold 17px Orbitron';
+            this.vizCtx.font = `bold ${this.getFontSize('external', isComplexDept)} Orbitron`;
             this.vizCtx.shadowColor = '#000000';
             this.vizCtx.shadowBlur = 4;
             this.vizCtx.textAlign = 'center';
             this.vizCtx.textBaseline = 'middle';
             
-            // Wrap long text
-            const maxWidth = 160;
+            // Wrap long text - smaller width for complex departments
+            const maxWidth = isComplexDept ? 130 : 160;
             const words = node.name.split(' ');
             let line = '';
             let lines = [];
