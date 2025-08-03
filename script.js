@@ -352,7 +352,7 @@ class TronCircuitboard {
         }, 2000); // Wait 2 seconds for text animation to complete
     }
     
-    getTextBoundaries() {
+    getTextBoundaries(addPadding = false) {
         const collegeText = document.getElementById('collegeText');
         
         // Default fallback boundaries (more conservative)
@@ -368,14 +368,24 @@ class TronCircuitboard {
             const rect = collegeText.getBoundingClientRect();
             const canvasRect = this.canvas.getBoundingClientRect();
             
-            // Add padding to prevent lines from overlapping the box
-            const padding = 15; // Pixels of padding around the text box
-            textBounds = {
-                left: rect.left - canvasRect.left - padding,
-                right: rect.right - canvasRect.left + padding,
-                top: rect.top - canvasRect.top - padding,
-                bottom: rect.bottom - canvasRect.top + padding
-            };
+            if (addPadding) {
+                // Add padding to prevent lines from overlapping the box (for node positioning)
+                const padding = 15;
+                textBounds = {
+                    left: rect.left - canvasRect.left - padding,
+                    right: rect.right - canvasRect.left + padding,
+                    top: rect.top - canvasRect.top - padding,
+                    bottom: rect.bottom - canvasRect.top + padding
+                };
+            } else {
+                // Connect directly to border edges (for line animation)
+                textBounds = {
+                    left: rect.left - canvasRect.left,
+                    right: rect.right - canvasRect.left,
+                    top: rect.top - canvasRect.top,
+                    bottom: rect.bottom - canvasRect.top
+                };
+            }
             
             // Ensure bounds are within canvas
             textBounds.left = Math.max(0, textBounds.left);
