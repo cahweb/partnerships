@@ -1371,7 +1371,13 @@ class TronCircuitboard {
         if (!this.departmentData) return;
         
         const department = this.departmentData.departments.find(d => d.id === departmentId);
-        if (!department) return;
+        if (!department) {
+            console.error('Department not found:', departmentId);
+            console.log('Available departments:', this.departmentData.departments.map(d => d.id));
+            return;
+        }
+        
+        console.log('Creating visualization for:', department.name, 'with ID:', departmentId);
         
         // Check cache first
         const cacheKey = `${departmentId}_${this.vizCanvas.width}_${this.vizCanvas.height}`;
@@ -1476,14 +1482,18 @@ class TronCircuitboard {
     }
 
     findOptimalLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
-        const maxAttempts = 1000; // Reduced from 12000 for much faster performance
+        // Increase attempts for departments with many nodes like SVAD
+        const baseAttempts = 1000;
+        const extraAttemptsPerNode = 100; // Add more attempts for complex layouts
+        const maxAttempts = Math.min(baseAttempts + (nodesToPlace.length * extraAttemptsPerNode), 3000);
+        
         let bestScore = -Infinity;
         let bestLayout = null;
         
-        // Early termination if we find a good enough solution
-        const targetScore = nodesToPlace.length * 0.8; // Good enough threshold
+        // Adjust target score based on node count - more nodes need better scores
+        const targetScore = nodesToPlace.length * 1.5; // Increased threshold for better layouts
         
-        console.log(`Finding optimal layout for ${nodesToPlace.length} nodes...`);
+        console.log(`Finding optimal layout for ${nodesToPlace.length} nodes with ${maxAttempts} attempts...`);
         
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const layout = this.generateRandomLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY);
@@ -1493,7 +1503,7 @@ class TronCircuitboard {
                 bestScore = score;
                 bestLayout = [...layout]; // Deep copy
                 
-                // Early termination for good solutions
+                // Early termination for good solutions, but be more selective
                 if (score >= targetScore) {
                     console.log(`Good solution found (score: ${score.toFixed(2)}) at attempt ${attempt}`);
                     break;
@@ -1501,50 +1511,136 @@ class TronCircuitboard {
             }
             
             // Progress feedback for longer searches
-            if (attempt % 200 === 0 && attempt > 0) {
+            if (attempt % 300 === 0 && attempt > 0) {
                 console.log(`Layout attempt ${attempt}, best score: ${bestScore.toFixed(2)}`);
             }
         }
         
-        console.log(`Final best score: ${bestScore.toFixed(2)}`);
+        console.log(`Final best score: ${bestScore.toFixed(2)} for ${nodesToPlace.length} nodes`);
         
         // Apply best layout
         if (bestLayout) {
             bestLayout.forEach(node => {
                 this.vizNodes.push(node);
             });
+        } else {
+            console.warn('No valid layout found! Using fallback.');
+            // Create a simple fallback layout if genetic algorithm fails
+            this.createFallbackLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY);
         }
     }
 
     generateRandomLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
         const layout = [];
-        const margin = 100;
+        const margin = 60; // Increased margin to ensure content stays on screen
         const usableWidth = canvasWidth - (margin * 2);
         const usableHeight = canvasHeight - (margin * 2);
         const maxRadius = Math.min(usableWidth, usableHeight) / 2;
         
-        // Define radius ranges for different node types
-        const radiusRanges = {
-            'degree': { min: maxRadius * 0.3, max: maxRadius * 0.5 },
-            'internal': { min: maxRadius * 0.55, max: maxRadius * 0.75 },
-            'external': { min: maxRadius * 0.8, max: maxRadius * 0.95 }
+        // Use more conservative vertical space to stay within bounds
+        const verticalSpread = canvasHeight * 0.5; // Reduced from 70% to 50% to stay in bounds
+        const horizontalSpread = canvasWidth * 0.45; // Reduced from 60% to 45%
+        
+        // Use staggered radial approach with controlled line lengths
+        const totalNodes = nodesToPlace.length;
+        const sectors = Math.max(12, Math.ceil(totalNodes / 1.5)); // More sectors for better distribution
+        const angleStep = (Math.PI * 2) / sectors;
+        
+        // Group nodes by type for better organization
+        const nodesByType = {
+            'degree': nodesToPlace.filter(n => n.type === 'degree'),
+            'internal': nodesToPlace.filter(n => n.type === 'internal'),
+            'external': nodesToPlace.filter(n => n.type === 'external')
         };
         
-        nodesToPlace.forEach(nodeTemplate => {
-            const range = radiusRanges[nodeTemplate.type];
-            const radius = range.min + Math.random() * (range.max - range.min);
-            const angle = Math.random() * Math.PI * 2;
+        // Define more conservative radius ranges that stay within bounds
+        const radiusRanges = {
+            'degree': { 
+                min: maxRadius * 0.4, 
+                max: maxRadius * 0.85, // Reduced from 1.1 to stay in bounds
+                verticalTier: -verticalSpread * 0.2, // Reduced from 0.25
+                tierVariation: verticalSpread * 0.1 // Reduced variation
+            },
+            'internal': { 
+                min: maxRadius * 0.5, 
+                max: maxRadius * 0.9, // Reduced from 1.2
+                verticalTier: 0, // Middle tier stays the same
+                tierVariation: verticalSpread * 0.08
+            },
+            'external': { 
+                min: maxRadius * 0.6, 
+                max: maxRadius * 0.95, // Reduced from 1.3
+                verticalTier: verticalSpread * 0.2, // Reduced from 0.25
+                tierVariation: verticalSpread * 0.1
+            }
+        };
+        
+        let sectorIndex = 0;
+        
+        // Place nodes in controlled staggered vertical pattern
+        Object.keys(nodesByType).forEach(nodeType => {
+            nodesByType[nodeType].forEach((nodeTemplate, typeIndex) => {
+                const range = radiusRanges[nodeType];
+                
+                // Create 4 distinct radius tiers within each type for line length variety
+                const radiusTier = (typeIndex % 4) * 0.15; // Reduced from 0.2
+                const baseRadius = range.min + (range.max - range.min) * (0.2 + radiusTier);
+                
+                // Add controlled randomness but keep structure
+                const radius = baseRadius + (Math.random() - 0.5) * maxRadius * 0.08; // Reduced randomness
+                
+                // Use sector-based angles with controlled variation
+                const baseSector = (sectorIndex % sectors);
+                const baseAngle = baseSector * angleStep;
+                const angleVariation = (Math.random() - 0.5) * angleStep * 0.6; // Reduced from 0.8
+                const angle = baseAngle + angleVariation;
+                
+                // Calculate base position
+                const baseX = centerX + Math.cos(angle) * radius;
+                const baseY = centerY + Math.sin(angle) * radius;
+                
+                // Apply vertical tier positioning with controlled staggering
+                const tierOffset = range.verticalTier + (typeIndex % 3 - 1) * range.tierVariation;
+                const horizontalJitter = (typeIndex % 5 - 2) * (horizontalSpread * 0.03); // Reduced jitter
+                
+                const x = baseX + horizontalJitter;
+                const y = baseY + tierOffset;
+                
+                // Ensure within bounds with adequate margin
+                const boundedPos = this.ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin);
+                
+                layout.push({
+                    ...nodeTemplate,
+                    x: boundedPos.x,
+                    y: boundedPos.y,
+                    textWidth: this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type),
+                    textHeight: this.estimateTextHeight(nodeTemplate.name, nodeTemplate.type)
+                });
+                
+                sectorIndex++;
+            });
+        });
+        
+        return layout;
+    }
+
+    createFallbackLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
+        console.log('Creating fallback layout for', nodesToPlace.length, 'nodes');
+        const margin = 80;
+        const maxRadius = Math.min(canvasWidth - margin * 2, canvasHeight - margin * 2) / 2;
+        
+        // Simple circular layout as fallback
+        nodesToPlace.forEach((nodeTemplate, index) => {
+            const angle = (index / nodesToPlace.length) * Math.PI * 2;
+            const radius = maxRadius * 0.7 + (index % 3) * (maxRadius * 0.1); // Three radius tiers
             
-            // Avoid horizontal text line areas
-            const adjustedAngle = this.adjustAngleToAvoidTextLine(angle);
-            
-            const x = centerX + Math.cos(adjustedAngle) * radius;
-            const y = centerY + Math.sin(adjustedAngle) * radius;
+            const x = centerX + Math.cos(angle) * radius;
+            const y = centerY + Math.sin(angle) * radius;
             
             // Ensure within bounds
             const boundedPos = this.ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin);
             
-            layout.push({
+            this.vizNodes.push({
                 ...nodeTemplate,
                 x: boundedPos.x,
                 y: boundedPos.y,
@@ -1552,12 +1648,10 @@ class TronCircuitboard {
                 textHeight: this.estimateTextHeight(nodeTemplate.name, nodeTemplate.type)
             });
         });
-        
-        return layout;
     }
 
     scoreLayout(layout, canvasWidth, canvasHeight) {
-        let score = 1000; // Start with base score
+        let score = 2000; // Start with higher base score
         
         // Center coordinates for line intersection checks
         const centerX = canvasWidth / 2;
@@ -1569,68 +1663,76 @@ class TronCircuitboard {
             y: centerY,
             type: 'central',
             radius: 25,
-            name: 'School of Visual Arts and Design' // The actual central text
+            name: 'Department Center'
         };
         
-        // Penalty system for overlaps and edge proximity
+        // Enhanced penalty system prioritizing text readability
         for (let i = 0; i < layout.length; i++) {
             const nodeA = layout[i];
             
-            // Check text boundaries - much more aggressive
+            // Check text boundaries with increased buffer
             const textBounds = this.getTextBounds(nodeA);
             
-            // Severe penalty for being too close to edges
-            const edgeMargin = 80;
-            if (textBounds.left < edgeMargin) score -= 300;
-            if (textBounds.right > canvasWidth - edgeMargin) score -= 300;
-            if (textBounds.top < edgeMargin) score -= 300;
-            if (textBounds.bottom > canvasHeight - edgeMargin) score -= 300;
+            // Penalty for being too close to edges (balanced to use space while staying in bounds)
+            const edgeMargin = 50; // Increased from 30 to match our layout margin
+            if (textBounds.left < edgeMargin) score -= 120;
+            if (textBounds.right > canvasWidth - edgeMargin) score -= 120;
+            if (textBounds.top < edgeMargin) score -= 120;
+            if (textBounds.bottom > canvasHeight - edgeMargin) score -= 120;
             
-            // CRITICAL: Check overlap with central node text - HIGHEST PRIORITY
-            const centralOverlapPenalty = this.calculateOverlapPenalty(nodeA, centralNode);
-            score -= centralOverlapPenalty * 5; // Even higher penalty for overlapping central text
+            // CRITICAL: Prevent overlap with central node
+            const centralOverlapPenalty = this.calculateTextOverlapPenalty(nodeA, centralNode);
+            score -= centralOverlapPenalty * 10; // Massive penalty for central overlap
             
-            // Check overlap with other nodes - HIGHEST PRIORITY
+            // CRITICAL: Prevent text overlap between nodes
             for (let j = i + 1; j < layout.length; j++) {
                 const nodeB = layout[j];
-                const overlapPenalty = this.calculateOverlapPenalty(nodeA, nodeB);
-                // Make overlap penalty MUCH more severe - this is the top priority
-                score -= overlapPenalty * 3; // Triple the overlap penalty
+                const textOverlapPenalty = this.calculateTextOverlapPenalty(nodeA, nodeB);
+                score -= textOverlapPenalty * 8; // Severe penalty for text overlap
+                
+                // Additional penalty for nodes being too close (visual clustering)
+                const distance = Math.sqrt(Math.pow(nodeA.x - nodeB.x, 2) + Math.pow(nodeA.y - nodeB.y, 2));
+                const minDistance = 80; // Minimum distance between node centers
+                if (distance < minDistance) {
+                    score -= (minDistance - distance) * 2;
+                }
             }
             
-            // Check for line intersections with other nodes - high priority
-            const lineIntersectionPenalty = this.calculateLineIntersectionPenalty(nodeA, layout, centerX, centerY);
-            score -= lineIntersectionPenalty;
-            
-            // Distance bonus - much reduced impact to allow movement for overlap prevention
+            // Bonus for good spacing and line length variety
             const distanceFromCenter = Math.sqrt(Math.pow(nodeA.x - centerX, 2) + Math.pow(nodeA.y - centerY, 2));
             const idealDistance = this.getIdealDistance(nodeA.type, Math.min(canvasWidth, canvasHeight) / 2);
             const distanceDiff = Math.abs(distanceFromCenter - idealDistance);
             
-            // Much smaller bonus for distance - overlap prevention takes priority
-            score += Math.max(0, 20 - distanceDiff * 0.3); // Reduced from 50 and made more gradual
+            // Reward appropriate distances with staggered bonus
+            score += Math.max(0, 30 - distanceDiff * 0.2);
+            
+            // Bonus for using the full canvas space effectively
+            if (distanceFromCenter > idealDistance * 0.8) {
+                score += 20; // Reward nodes that use outer space
+            }
         }
         
         return score;
     }
-
-    calculateOverlapPenalty(nodeA, nodeB) {
+    
+    calculateTextOverlapPenalty(nodeA, nodeB) {
         const boundsA = this.getTextBounds(nodeA);
         const boundsB = this.getTextBounds(nodeB);
         
-        // Increase text bounds with larger buffer to prevent overlap
-        const buffer = 35; // Increased buffer even more for better spacing
+        // Add larger buffer around text to ensure readability
+        const textBuffer = 50; // Increased from 35 to 50 for even better text spacing
+        
         const expandedBoundsA = {
-            left: boundsA.left - buffer,
-            right: boundsA.right + buffer,
-            top: boundsA.top - buffer,
-            bottom: boundsA.bottom + buffer
+            left: boundsA.left - textBuffer,
+            right: boundsA.right + textBuffer,
+            top: boundsA.top - textBuffer,
+            bottom: boundsA.bottom + textBuffer
         };
         const expandedBoundsB = {
-            left: boundsB.left - buffer,
-            right: boundsB.right + buffer,
-            top: boundsB.top - buffer,
-            bottom: boundsB.bottom + buffer
+            left: boundsB.left - textBuffer,
+            right: boundsB.right + textBuffer,
+            top: boundsB.top - textBuffer,
+            bottom: boundsB.bottom + textBuffer
         };
         
         // Calculate overlap area with expanded bounds
