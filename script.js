@@ -31,6 +31,11 @@ class TronCircuitboard {
         // Filtering system
         this.activeFilter = null; // 'central', 'degree', 'track', 'internal', 'external', or null for all
         
+        // Performance optimizations
+        this.layoutCache = new Map(); // Cache for computed layouts
+        this.lastVizFrame = 0; // For frame rate limiting
+        this.vizAnimationId = null; // Track animation frame ID
+        
         this.departmentNames = [
             'School of Performing Arts',
             'School of Visual Arts and Design',
@@ -856,13 +861,18 @@ class TronCircuitboard {
             radiusVariation = 25;
         }
         
-        // Calculate angle for this node with better distribution
-        const angle = (index / totalNodes) * 2 * Math.PI + (Math.PI / totalNodes); // Offset to avoid straight axes
+        // Calculate angle for this node with better distribution (precompute constants)
+        const angleOffset = Math.PI / totalNodes; // Precompute offset
+        const angle = (index / totalNodes) * 2 * Math.PI + angleOffset; // Offset to avoid straight axes
         const radius = baseRadius + (Math.sin(index * 0.7) * radiusVariation); // Use sine for smoother variation
         
+        // Precompute trigonometric values
+        const cosAngle = Math.cos(angle);
+        const sinAngle = Math.sin(angle);
+        
         // Calculate position relative to text center
-        let x = textArea.centerX + Math.cos(angle) * radius - nodeWidth/2;
-        let y = textArea.centerY + Math.sin(angle) * radius - nodeHeight/2;
+        let x = textArea.centerX + cosAngle * radius - nodeWidth/2;
+        let y = textArea.centerY + sinAngle * radius - nodeHeight/2;
         
         // Ensure nodes stay within reasonable bounds (responsive margins)
         let margin = 60;
@@ -1353,6 +1363,21 @@ class TronCircuitboard {
         const department = this.departmentData.departments.find(d => d.id === departmentId);
         if (!department) return;
         
+        // Check cache first
+        const cacheKey = `${departmentId}_${this.vizCanvas.width}_${this.vizCanvas.height}`;
+        if (this.layoutCache.has(cacheKey)) {
+            const cachedLayout = this.layoutCache.get(cacheKey);
+            this.vizNodes = [...cachedLayout.nodes];
+            this.vizLinks = [...cachedLayout.links];
+            console.log('Using cached layout for', departmentId);
+            
+            // Animate links
+            setTimeout(() => {
+                this.animateVizLinks();
+            }, 100);
+            return;
+        }
+        
         // Clear previous visualization
         this.vizNodes = [];
         this.vizLinks = [];
@@ -1427,6 +1452,13 @@ class TronCircuitboard {
             }
         });
         
+        // Cache the layout for future use
+        const layoutCacheKey = `${departmentId}_${canvasWidth}_${canvasHeight}`;
+        this.layoutCache.set(layoutCacheKey, {
+            nodes: [...this.vizNodes],
+            links: [...this.vizLinks]
+        });
+        
         // Animate links
         setTimeout(() => {
             this.animateVizLinks();
@@ -1434,9 +1466,12 @@ class TronCircuitboard {
     }
 
     findOptimalLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
-        const maxAttempts = 12000; // Increased attempts significantly for better overlap prevention
+        const maxAttempts = 1000; // Reduced from 12000 for much faster performance
         let bestScore = -Infinity;
         let bestLayout = null;
+        
+        // Early termination if we find a good enough solution
+        const targetScore = nodesToPlace.length * 0.8; // Good enough threshold
         
         console.log(`Finding optimal layout for ${nodesToPlace.length} nodes...`);
         
@@ -1447,13 +1482,17 @@ class TronCircuitboard {
             if (score > bestScore) {
                 bestScore = score;
                 bestLayout = [...layout]; // Deep copy
-                console.log(`New best score: ${score.toFixed(2)} at attempt ${attempt}`);
+                
+                // Early termination for good solutions
+                if (score >= targetScore) {
+                    console.log(`Good solution found (score: ${score.toFixed(2)}) at attempt ${attempt}`);
+                    break;
+                }
             }
             
-            // Only early terminate for very high scores - prioritize finding overlap-free layouts
-            if (score > 2000) {
-                console.log(`Excellent overlap-free layout found at attempt ${attempt} with score ${score.toFixed(2)}`);
-                break;
+            // Progress feedback for longer searches
+            if (attempt % 200 === 0 && attempt > 0) {
+                console.log(`Layout attempt ${attempt}, best score: ${bestScore.toFixed(2)}`);
             }
         }
         
@@ -2311,14 +2350,32 @@ class TronCircuitboard {
     }
     
     animateVisualization() {
-        // Fill with semi-transparent black to hide main view but show grid
-        this.vizCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-        this.vizCtx.fillRect(0, 0, this.vizCanvas.width, this.vizCanvas.height);
+        // Limit frame rate for better performance (30fps instead of 60fps)
+        if (!this.lastVizFrame || Date.now() - this.lastVizFrame > 33) {
+            this.lastVizFrame = Date.now();
+            
+            // Fill with semi-transparent black to hide main view but show grid
+            this.vizCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            this.vizCtx.fillRect(0, 0, this.vizCanvas.width, this.vizCanvas.height);
+            
+            // Update animation time
+            this.animationTime += 0.033; // 30fps instead of 60fps
+            
+            // Draw links with batched operations
+            this.drawVizLinks();
+            
+            // Draw nodes with batched operations  
+            this.drawVizNodes();
+        }
         
-        // Update animation time
-        this.animationTime += 0.016; // ~60fps
-        
-        // Draw links
+        if (this.isDetailView) {
+            this.vizAnimationId = requestAnimationFrame(() => this.animateVisualization());
+        }
+    }
+    
+    drawVizLinks() {
+        // Batch link drawing operations
+        this.vizCtx.save();
         this.vizLinks.forEach(link => {
             const sourceNode = this.vizNodes.find(n => n.id === link.source);
             const targetNode = this.vizNodes.find(n => n.id === link.target);
@@ -2327,6 +2384,12 @@ class TronCircuitboard {
                 this.drawVizLink(sourceNode, targetNode, link.type, link.opacity);
             }
         });
+        this.vizCtx.restore();
+    }
+    
+    drawVizNodes() {
+        // Batch node drawing operations
+        this.vizCtx.save();
         
         // Draw hover tracks if a degree node is hovered and should be shown
         if (this.hoveredNode && this.hoveredNode.tracks && this.shouldShowNode(this.hoveredNode)) {
@@ -2347,7 +2410,7 @@ class TronCircuitboard {
             }
         });
         
-        requestAnimationFrame(() => this.animateVisualization());
+        this.vizCtx.restore();
     }
 
     drawHoverTracks(degreeNode) {
