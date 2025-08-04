@@ -2466,7 +2466,7 @@ class TronCircuitboard {
         if (department.internalPartners && department.internalPartners.length > 0) {
             html += `
                 <div class="card-section">
-                    <h3 class="section-title">Internal Partners</h3>
+                    <h3 class="section-title">Intra-College Partners</h3>
                     <div class="section-content">
                         <ul class="section-list">
                             ${department.internalPartners.map(partner => 

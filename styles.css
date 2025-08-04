@@ -65,7 +65,7 @@ body, html {
 
 .digital-text {
     color: #ff6600;
-    font-size: 3.5rem;
+    font-size: 1.75rem;
     font-weight: 400;
     text-shadow: 
         0 0 10px #ff6600,
@@ -77,7 +77,7 @@ body, html {
     transition: all 1.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     letter-spacing: 2px;
     position: absolute;
-    top: -120px;
+    top: -40px;
     left: 50%;
     transform-origin: center;
 }
@@ -841,8 +841,8 @@ body, html {
     }
     
     .digital-text {
-        font-size: 3rem;
-        top: -90px;
+        font-size: 1.5rem;
+        top: -30px;
     }
     
     .neon-button {
@@ -914,8 +914,8 @@ body, html {
     }
     
     .digital-text {
-        font-size: 2.2rem;
-        top: -65px;
+        font-size: 1.1rem;
+        top: -25px;
         letter-spacing: 2px;
     }
     
