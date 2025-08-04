@@ -88,11 +88,15 @@
         "Theatre MFA: Acting Track",
         "Theatre MFA: Theatre for Young Audiences Track"
       ],
-      "internalPartners": [
-        "UCF Celebrates the Arts: Colleges of Sciences, Engineering, Nursing, CHPS, Rosen",
-        "CARD",
-        "CAVE"
-      ],
+      "internal_partners": [
+      "COS",
+      "CECS",
+      "CARD",
+      "CHPS",
+      "CON",
+      "Rosen",
+      "CAVE"
+    ],
       "externalPartners": [
         "Dr. Phillips Center for Performing Arts",
         "Orlando Philharmonic Orchestra",
@@ -154,7 +158,6 @@
       ],
       "internalPartners": [
         "UCF Art Gallery",
-        "UCF Celebrates the Arts",
         "CREATE",
         "Flying Horse Editions"
       ],
@@ -163,7 +166,8 @@
         "Universal Creative",
         "Boss Laser",
         "Mattamy Homes",
-        "American Outlaws and U.S. Women's Soccer Teams",
+        "American Outlaws",
+        "U.S. Women's Soccer Teams",
         "CreateX paints",
         "Microsoft",
         "Riot Games",
@@ -177,7 +181,7 @@
         "AIGA",
         "Atlantic Center for the Arts",
         "Orlando Science Center",
-        "Valencia College and University of Florida (Architecture 2+2+2)"
+        "Valencia College + UF (Architecture 2+2+2)"
       ],
       "highlights": [
         {
@@ -361,10 +365,6 @@
           "url": "https://cah.ucf.edu/languages/study-abroad/"
         },
         {
-          "title": "Futures in Languages Podcast",
-          "url": "https://stars.library.ucf.edu/futures-in-languages/"
-        },
-        {
           "title": "UF-CLAS Shared Language Program",
           "url": "https://clas.ufl.edu/shared-language-program/"
         }
@@ -456,11 +456,7 @@
           "url": "https://cah.ucf.edu/writingrhetoric/stylus/"
         },
         {
-          "title": "Discussions on Writing & Rhetoric Podcast",
-          "url": "https://ucfdwr.podbean.com/"
-        },
-        {
-          "title": "Knights Write! Showcase",
+          "title": "Knights Write!",
           "url": "https://cah.ucf.edu/writingrhetoric/knights-write/"
         }
       ],
@@ -494,7 +490,7 @@
       "highlights": [
         {
           "title": "Electronic Literature Organization Conference and Media Arts Festival",
-          "url": "https://stars.library.ucf.edu/elo2024/"
+          "url": "https://projects.cah.ucf.edu/mediaartsexhibits/elo2024/"
         },
         {
           "title": "ELLE EndLess LEarner",
@@ -526,7 +522,7 @@
       ],
       "internalPartners": [
         "CAVE",
-        "College of Engineering"
+        "COE"
       ],
       "externalPartners": [
         "Themed Experience Advisory Council: Walt Disney Imagineering",

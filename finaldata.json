@@ -104,8 +104,12 @@
       }
     ],
     "internal_partners": [
-      "UCF Celebrates the Arts: Colleges of Sciences, Engineering, Nursing, CHPS, Rosen",
+      "COS",
+      "CECS",
       "CARD",
+      "CHPS",
+      "CON",
+      "Rosen",
       "CAVE"
     ],
     "external_partners": [
@@ -113,9 +117,9 @@
       "Orlando Philharmonic Orchestra",
       "Orlando Family Stage",
       "Orlando Shakes",
-      "members of UCF Opera Board",
-      "members of Theatre Professional Advisory Board",
-      "OUC (support of UCF Celebrates the Arts)"
+      "UCF Opera Board",
+      "Theatre Professional Advisory Board",
+      "OUC (Celebrates)"
     ],
     "highlights": [
       {
@@ -175,7 +179,6 @@
     ],
     "internal_partners": [
       "UCF Art Gallery",
-      "UCF Celebrates the Arts",
       "CREATE",
       "Flying Horse Editions"
     ],
@@ -184,7 +187,7 @@
       "Universal Creative",
       "Boss Laser",
       "Mattamy Homes",
-      "American Outlaws and U.S. Women's Soccer Teams",
+      "American Outlaws + U.S. Women's Soccer Teams",
       "CreateX paints",
       "Microsoft",
       "Riot Games",
@@ -399,10 +402,6 @@
         "url": "https://cah.ucf.edu/languages/study-abroad/"
       },
       {
-        "title": "Futures in Languages Podcast",
-        "url": "https://stars.library.ucf.edu/futures-in-languages/"
-      },
-      {
         "title": "UF-CLAS Shared Language Program",
         "url": "https://clas.ufl.edu/shared-language-program/"
       }
@@ -500,11 +499,7 @@
         "url": "https://cah.ucf.edu/writingrhetoric/stylus/"
       },
       {
-        "title": "Discussions on Writing & Rhetoric Podcast",
-        "url": "https://ucfdwr.podbean.com/"
-      },
-      {
-        "title": "Knights Write! Showcase",
+        "title": "Knights Write!",
         "url": "https://cah.ucf.edu/writingrhetoric/knights-write/"
       }
     ],
