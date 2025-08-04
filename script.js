@@ -2325,7 +2325,7 @@ class TronCircuitboard {
         }
         
         // Internal Partners
-        if (department.internalPartners.length > 0) {
+        if (department.internalPartners && department.internalPartners.length > 0) {
             html += `
                 <div class="card-section">
                     <h3 class="section-title">Internal Partners</h3>
@@ -2341,7 +2341,7 @@ class TronCircuitboard {
         }
         
         // External Partners
-        if (department.externalPartners.length > 0) {
+        if (department.externalPartners && department.externalPartners.length > 0) {
             html += `
                 <div class="card-section">
                     <h3 class="section-title">External Partners</h3>
@@ -2357,7 +2357,7 @@ class TronCircuitboard {
         }
         
         // All Highlights/Projects 
-        if (department.highlights.length > 0) {
+        if (department.highlights && department.highlights.length > 0) {
             html += `
                 <div class="card-section">
                     <h3 class="section-title">Projects & Highlights</h3>
@@ -2373,7 +2373,7 @@ class TronCircuitboard {
         }
         
         // Tech Courses
-        if (department.techCourses.length > 0) {
+        if (department.techCourses && department.techCourses.length > 0) {
             html += `
                 <div class="card-section">
                     <h3 class="section-title">Technology-Focused Courses</h3>
