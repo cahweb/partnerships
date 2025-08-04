@@ -282,7 +282,8 @@ class TronCircuitboard {
                 
                 // If we're in detail view, recreate the visualization
                 if (this.isDetailView && this.currentNode) {
-                    this.createPartnershipVisualization(this.currentNode);
+                    const departmentId = this.getDepartmentId(this.currentNode.textContent);
+                    this.createPartnershipVisualization(departmentId);
                 } else if (this.nodesGenerated) {
                     // Reposition existing nodes for new canvas size with responsive logic
                     this.repositionNodesForResize();

@@ -482,7 +482,8 @@
         "Digital Humanities in the Age of AI Certificate"
       ],
       "internalPartners": [
-        "Center for Humanities and Digital Research (CHDR)"
+        "Center for Humanities and Digital Research (CHDR)",
+        "interdisciplinary faculty from NSCM"
       ],
       "externalPartners": [
         "Electronic Literature Organization"
@@ -495,6 +496,10 @@
         {
           "title": "ELLE EndLess LEarner",
           "url": "https://chdr.cs.ucf.edu/elle/home"
+        },
+        {
+          "title": "Digital Humanities Summer Institute: Programming and AI",
+          "url": "https://anastasiasalter.net/DHProgramming/"
         },
         {
           "title": "Humanities in the Age of AI",
