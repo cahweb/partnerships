@@ -192,14 +192,39 @@ class TronCircuitboard {
             this.exitDetailView();
         });
         
-        // ESC key to exit detail view
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isDetailView) {
-                this.exitDetailView();
+        // Setup department info button
+        const deptInfoButton = document.getElementById('deptInfoButton');
+        deptInfoButton.addEventListener('click', () => {
+            if (this.currentDepartmentId) {
+                this.showDataCard(this.currentDepartmentId);
             }
-            // ESC key to close popup
+        });
+        
+        // Setup data card close button
+        const dataCardClose = document.getElementById('dataCardClose');
+        dataCardClose.addEventListener('click', () => {
+            this.hideDataCard();
+        });
+        
+        // Click outside data card to close
+        const dataCard = document.getElementById('dataCard');
+        dataCard.addEventListener('click', (e) => {
+            if (e.target === dataCard) {
+                this.hideDataCard();
+            }
+        });
+        
+        // ESC key to exit detail view or close data card
+        document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                this.closePopup();
+                const dataCard = document.getElementById('dataCard');
+                if (dataCard.classList.contains('show')) {
+                    this.hideDataCard();
+                } else if (this.isDetailView) {
+                    this.exitDetailView();
+                } else {
+                    this.closePopup();
+                }
             }
         });
         
@@ -1240,10 +1265,10 @@ class TronCircuitboard {
             }
         });
         
-        // Show data card and viz area
+        // Show viz area and department button
         setTimeout(() => {
-            this.showDataCard(departmentId);
             this.showVizArea();
+            this.showDepartmentButton(departmentId);
             this.createPartnershipVisualization(departmentId);
         }, 400);
     }
@@ -1252,8 +1277,9 @@ class TronCircuitboard {
         if (!this.isDetailView) return;
         this.isDetailView = false;
         
-        // Hide data card and viz area
+        // Hide data card, department button and viz area
         this.hideDataCard();
+        this.hideDepartmentButton();
         this.hideVizArea();
         
         // Fade in other elements
@@ -1305,6 +1331,34 @@ class TronCircuitboard {
     hideDataCard() {
         const dataCard = document.getElementById('dataCard');
         dataCard.classList.remove('show');
+    }
+    
+    showDepartmentButton(departmentId) {
+        if (!this.departmentData) {
+            console.warn('Department data not loaded yet');
+            return;
+        }
+        
+        const department = this.departmentData.departments.find(d => d.id === departmentId);
+        if (!department) {
+            console.warn('Department not found:', departmentId);
+            return;
+        }
+        
+        const container = document.getElementById('deptInfoContainer');
+        const button = document.getElementById('deptInfoButton');
+        const text = document.getElementById('deptInfoText');
+        
+        text.textContent = department.name;
+        container.style.display = 'block';
+        
+        // Store current department for the overlay
+        this.currentDepartmentId = departmentId;
+    }
+    
+    hideDepartmentButton() {
+        const container = document.getElementById('deptInfoContainer');
+        container.style.display = 'none';
     }
     
     showVizArea() {

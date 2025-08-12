@@ -15,8 +15,19 @@
     <div id="buttonContainer">
         <button id="exploreButton" class="neon-button">Click to Explore</button>
     </div>
-    <!-- Left Data Card -->
+    
+    <!-- Department Info Button (hidden initially) -->
+    <div id="deptInfoContainer" class="dept-info-container" style="display: none;">
+        <button id="deptInfoButton" class="dept-info-button">
+            <span id="deptInfoText">Department Info</span>
+        </button>
+    </div>
+    
+    <!-- Left Data Card (now overlay) -->
     <div id="dataCard" class="data-card">
+        <div class="data-card-header">
+            <button id="dataCardClose" class="data-card-close">×</button>
+        </div>
         <div id="dataCardContent" class="data-card-content"></div>
     </div>
     
