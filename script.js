@@ -249,6 +249,9 @@ class TronCircuitboard {
     }
     
     openPopup(title, url) {
+        // Close the datacard to avoid conflicts with the popup
+        this.hideDataCard();
+        
         const overlay = document.getElementById('popupOverlay');
         const titleElement = document.getElementById('popupTitle');
         const iframe = document.getElementById('popupIframe');
@@ -1537,48 +1540,65 @@ class TronCircuitboard {
     }
 
     findOptimalLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
-        // Get current department name for specific handling
+        // Get current department name for enhanced handling of complex departments
         const currentDept = this.vizNodes.find(n => n.type === 'central');
+        const partnerCount = nodesToPlace.length;
+        
+        const isSmallDept = partnerCount <= 8;
         const isComplexDept = currentDept && (
             currentDept.name.includes('Visual Arts') || 
-            currentDept.name.includes('Performing Arts')
+            currentDept.name.includes('Performing Arts') ||
+            currentDept.name.includes('Modern Languages and Literatures')
         );
         
-        // Increase attempts for departments with many nodes like SVAD and complex departments
-        const baseAttempts = isComplexDept ? 1500 : 1000; // More attempts for complex departments
-        const extraAttemptsPerNode = isComplexDept ? 150 : 100; // More attempts per node
-        const maxAttempts = Math.min(baseAttempts + (nodesToPlace.length * extraAttemptsPerNode), isComplexDept ? 4000 : 3000);
+        // Detect very complex departments with 20+ partners
+        const isVeryComplexDept = currentDept && (
+            currentDept.name.includes('School of Performing Arts') || 
+            currentDept.name.includes('School of Visual Arts and Design')
+        );
+        
+        // Adjust attempts based on complexity - fewer attempts for small departments to find solutions faster
+        const nodeCount = nodesToPlace.length;
+        const baseAttempts = isSmallDept ? Math.min(400, nodeCount * 20) : isVeryComplexDept ? Math.min(600, nodeCount * 40) : Math.min(800, nodeCount * 60);
+        const maxAttempts = isSmallDept ? Math.min(600, baseAttempts + (nodeCount * 30)) : isVeryComplexDept ? Math.min(1200, baseAttempts + (nodeCount * 60)) : Math.min(1500, baseAttempts + (nodeCount * 80));
         
         let bestScore = -Infinity;
         let bestLayout = null;
         
-        // Adjust target score based on node count and complexity
-        const targetScore = nodesToPlace.length * (isComplexDept ? 2.0 : 1.5); // Higher threshold for complex departments
+        // Adjusted target score for complex departments (much more lenient for small departments)
+        const targetScore = isSmallDept ? nodeCount * 0.8 : isVeryComplexDept ? nodeCount * 1.4 : nodeCount * 1.8;
         
-        console.log(`Finding optimal layout for ${nodesToPlace.length} nodes with ${maxAttempts} attempts (Complex: ${isComplexDept})...`);
+        console.log(`Optimizing layout for ${nodeCount} nodes (complex: ${isComplexDept}, very complex: ${isVeryComplexDept}) with ${maxAttempts} attempts...`);
         
+        // Try grid-based approach first for better distribution
+        const gridLayout = this.generateGridBasedLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY);
+        const gridScore = this.scoreLayout(gridLayout, canvasWidth, canvasHeight, isComplexDept, isSmallDept);
+        bestScore = gridScore;
+        bestLayout = [...gridLayout];
+        
+        // Then improve with random attempts
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const layout = this.generateRandomLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY);
-            const score = this.scoreLayout(layout, canvasWidth, canvasHeight, isComplexDept);
+            const score = this.scoreLayout(layout, canvasWidth, canvasHeight, isComplexDept, isSmallDept);
             
             if (score > bestScore) {
                 bestScore = score;
-                bestLayout = [...layout]; // Deep copy
+                bestLayout = [...layout];
                 
-                // Early termination for good solutions, but be more selective for complex departments
+                // Early termination for good solutions
                 if (score >= targetScore) {
                     console.log(`Good solution found (score: ${score.toFixed(2)}) at attempt ${attempt}`);
                     break;
                 }
             }
             
-            // Progress feedback for longer searches
-            if (attempt % 300 === 0 && attempt > 0) {
+            // Less frequent progress updates for performance
+            if (attempt % 500 === 0 && attempt > 0) {
                 console.log(`Layout attempt ${attempt}, best score: ${bestScore.toFixed(2)}`);
             }
         }
         
-        console.log(`Final best score: ${bestScore.toFixed(2)} for ${nodesToPlace.length} nodes (Complex: ${isComplexDept})`);
+        console.log(`Final best score: ${bestScore.toFixed(2)} for ${nodeCount} nodes`);
         
         // Apply best layout
         if (bestLayout) {
@@ -1587,45 +1607,322 @@ class TronCircuitboard {
             });
         } else {
             console.warn('No valid layout found! Using fallback.');
-            // Create a simple fallback layout if genetic algorithm fails
             this.createFallbackLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY);
         }
     }
 
+    generateGridBasedLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
+        const layout = [];
+        
+        // Get current department for complexity detection
+        const currentDept = this.vizNodes.find(n => n.type === 'central');
+        const partnerCount = nodesToPlace.length;
+        
+        const isSmallDept = partnerCount <= 8;
+        const isComplexDept = currentDept && (
+            currentDept.name.includes('Visual Arts') || 
+            currentDept.name.includes('Performing Arts') ||
+            currentDept.name.includes('Modern Languages and Literatures')
+        );
+        const isVeryComplexDept = currentDept && (
+            currentDept.name.includes('School of Performing Arts') || 
+            currentDept.name.includes('School of Visual Arts and Design')
+        );
+        
+        // Adaptive margin based on complexity - smaller margins for small departments
+        const margin = isVeryComplexDept ? 30 : isComplexDept ? 35 : isSmallDept ? 25 : 40;
+        
+        // Center exclusion zone - same as random layout
+        const centerRadius = 160;
+        
+        // Group nodes by type for systematic placement
+        const nodesByType = {
+            'degree': nodesToPlace.filter(n => n.type === 'degree'),
+            'internal': nodesToPlace.filter(n => n.type === 'internal'),
+            'external': nodesToPlace.filter(n => n.type === 'external')
+        };
+        
+        // Enhanced canvas usage for complex departments
+        const usableWidth = canvasWidth - (margin * 2);
+        const usableHeight = canvasHeight - (margin * 2);
+        
+        // Simple legend avoidance - just the bottom right corner
+        const legendWidth = 200;
+        const legendHeight = 180;
+        
+        // Enhanced grid sectors for complex departments with better space distribution
+        const baseSectors = [
+            // Top row - spread out to avoid clustering
+            { x: 0.2, y: 0.08, weight: 1.0, type: 'degree' },
+            { x: 0.8, y: 0.08, weight: 1.0, type: 'degree' },
+            
+            // Upper sides - good for internal partners
+            { x: 0.05, y: 0.2, weight: 1.1, type: 'internal' },
+            { x: 0.95, y: 0.2, weight: 1.1, type: 'internal' },
+            
+            // Mid-upper sides
+            { x: 0.03, y: 0.35, weight: 1.2, type: 'external' },
+            { x: 0.97, y: 0.35, weight: 1.2, type: 'external' },
+            
+            // Middle sides - prioritize external
+            { x: 0.02, y: 0.5, weight: 1.2, type: 'external' },
+            { x: 0.98, y: 0.5, weight: 1.2, type: 'external' },
+            
+            // Lower sides - great for external partners
+            { x: 0.05, y: 0.65, weight: 1.1, type: 'external' },
+            { x: 0.95, y: 0.65, weight: 1.1, type: 'external' },
+            
+            // Bottom area - utilize empty space, avoid legend
+            { x: 0.15, y: 0.8, weight: 0.9, type: 'external' },
+            { x: 0.35, y: 0.85, weight: 0.8, type: 'external' },
+            { x: 0.55, y: 0.88, weight: 0.7, type: 'external' },
+            
+            // Additional positions for degrees (mid-range)
+            { x: 0.25, y: 0.25, weight: 1.0, type: 'degree' },
+            { x: 0.75, y: 0.25, weight: 1.0, type: 'degree' },
+            
+            // Additional internal positions
+            { x: 0.15, y: 0.45, weight: 1.1, type: 'internal' },
+            { x: 0.85, y: 0.45, weight: 1.1, type: 'internal' },
+        ];
+        
+        // Add extra sectors for very complex departments focused on filling empty areas
+        const extraSectors = isVeryComplexDept ? [
+            // Lower area utilization
+            { x: 0.25, y: 0.75, weight: 0.8, type: 'external' },
+            { x: 0.45, y: 0.8, weight: 0.8, type: 'external' },
+            { x: 0.65, y: 0.78, weight: 0.7, type: 'external' },
+            
+            // Far edges
+            { x: 0.01, y: 0.15, weight: 1.0, type: 'external' },
+            { x: 0.99, y: 0.15, weight: 1.0, type: 'external' },
+            { x: 0.01, y: 0.75, weight: 0.9, type: 'external' },
+            { x: 0.99, y: 0.75, weight: 0.9, type: 'external' },
+        ] : isSmallDept ? [
+            // Force small departments to use all quadrants
+            { x: 0.1, y: 0.1, weight: 1.2, type: 'degree' },
+            { x: 0.9, y: 0.1, weight: 1.2, type: 'internal' },
+            { x: 0.1, y: 0.9, weight: 0.9, type: 'external' },
+            { x: 0.9, y: 0.9, weight: 0.9, type: 'external' },
+            { x: 0.5, y: 0.05, weight: 1.1, type: 'degree' },
+            { x: 0.05, y: 0.5, weight: 1.1, type: 'internal' },
+            { x: 0.95, y: 0.5, weight: 1.1, type: 'internal' },
+            { x: 0.5, y: 0.85, weight: 0.8, type: 'external' },
+        ] : [];
+        
+        const sectors = [...baseSectors, ...extraSectors];
+        
+        // Separate sectors by preferred type for better distribution
+        const sectorsByType = {
+            'degree': sectors.filter(s => s.type === 'degree' || !s.type),
+            'internal': sectors.filter(s => s.type === 'internal' || !s.type),
+            'external': sectors.filter(s => s.type === 'external' || !s.type)
+        };
+        
+        
+        // Place each type with intelligent sector assignment and proper spacing
+        Object.keys(nodesByType).forEach(nodeType => {
+            const nodes = nodesByType[nodeType];
+            const typeSectors = sectorsByType[nodeType] || sectors;
+            
+            // Enhanced type spread for complex departments - reasonable spacing for small departments
+            let typeSpread = 1.0;
+            if (isVeryComplexDept) {
+                typeSpread = nodeType === 'external' ? 1.8 : nodeType === 'internal' ? 1.4 : 1.0;
+            } else if (isComplexDept) {
+                typeSpread = nodeType === 'external' ? 1.5 : nodeType === 'internal' ? 1.2 : 0.9;
+            } else if (isSmallDept) {
+                typeSpread = nodeType === 'external' ? 1.6 : nodeType === 'internal' ? 1.4 : 1.2;
+            } else {
+                typeSpread = nodeType === 'external' ? 1.2 : nodeType === 'internal' ? 1.0 : 0.8;
+            }
+            
+            nodes.forEach((nodeTemplate, index) => {
+                // Force quadrant distribution for small departments to prevent clustering
+                let sectorIndex, sector;
+                if (isSmallDept && nodes.length > 2) {
+                    // Systematically distribute across quadrants for better balance
+                    const quadrant = index % 4;
+                    const sectorsPerQuadrant = Math.floor(typeSectors.length / 4);
+                    const quadrantStart = quadrant * sectorsPerQuadrant;
+                    const availableInQuadrant = typeSectors.slice(quadrantStart, quadrantStart + sectorsPerQuadrant);
+                    if (availableInQuadrant.length > 0) {
+                        sectorIndex = Math.floor(Math.random() * availableInQuadrant.length);
+                        sector = availableInQuadrant[sectorIndex];
+                    } else {
+                        sectorIndex = index % typeSectors.length;
+                        sector = typeSectors[sectorIndex];
+                    }
+                } else {
+                    // Use type-specific sectors but add variation to prevent exact overlap
+                    sectorIndex = index % typeSectors.length;
+                    sector = typeSectors[sectorIndex];
+                }
+                
+                // Add progressive offset based on index to spread similar types
+                const progressiveOffset = {
+                    x: (index * 0.05) % 0.2 - 0.1, // ±10% offset
+                    y: ((index * 0.07) % 0.16) - 0.08 // ±8% offset
+                };
+                
+                // Calculate position with enhanced canvas usage and variation
+                const baseX = margin + (usableWidth * Math.max(0, Math.min(1, sector.x + progressiveOffset.x)));
+                const baseY = margin + (usableHeight * Math.max(0, Math.min(1, sector.y + progressiveOffset.y)));
+                
+                // Enhanced variation to prevent overlap
+                const baseVariation = isVeryComplexDept ? 70 : isComplexDept ? 60 : 50;
+                const variation = baseVariation * typeSpread;
+                const offsetX = (Math.random() - 0.5) * variation;
+                const offsetY = (Math.random() - 0.5) * variation;
+                
+                let x = baseX + offsetX;
+                let y = baseY + offsetY;
+                
+                // Add spacing check to prevent direct overlap
+                let attempts = 0;
+                while (attempts < 5) {
+                    let tooClose = false;
+                    for (let i = 0; i < layout.length; i++) {
+                        const existing = layout[i];
+                        const distance = Math.sqrt((x - existing.x) ** 2 + (y - existing.y) ** 2);
+                        const minDistance = 60; // Minimum distance between nodes
+                        
+                        if (distance < minDistance) {
+                            tooClose = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!tooClose) break;
+                    
+                    // Adjust position if too close
+                    const adjustAngle = Math.random() * Math.PI * 2;
+                    const adjustDistance = 80 + Math.random() * 40;
+                    x = baseX + Math.cos(adjustAngle) * adjustDistance;
+                    y = baseY + Math.sin(adjustAngle) * adjustDistance;
+                    attempts++;
+                }
+                
+                // Special handling for degrees with tracks - keep them closer to center (reduced distance)
+                if (nodeTemplate.type === 'degree' && nodeTemplate.tracks && nodeTemplate.tracks.length > 0) {
+                    const distanceFromCenter = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                    const maxDistanceForTracks = Math.min(canvasWidth, canvasHeight) * 0.24; // Reduced from 25% to 24%
+                    
+                    if (distanceFromCenter > maxDistanceForTracks) {
+                        const angle = Math.atan2(y - centerY, x - centerX);
+                        x = centerX + Math.cos(angle) * maxDistanceForTracks;
+                        y = centerY + Math.sin(angle) * maxDistanceForTracks;
+                    }
+                }
+                
+                // Final bounds check and center exclusion enforcement
+                const effectiveMargin = isVeryComplexDept ? margin * 0.7 : margin;
+                x = Math.max(effectiveMargin, Math.min(x, canvasWidth - effectiveMargin));
+                y = Math.max(effectiveMargin, Math.min(y, canvasHeight - effectiveMargin));
+                
+                // CRITICAL: Final center exclusion check after all adjustments
+                const finalDistanceFromCenter = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                const finalCenterRadius = isComplexDept ? centerRadius + 40 : centerRadius + 20;
+                if (finalDistanceFromCenter < finalCenterRadius) {
+                    // Force position outside center exclusion zone
+                    const currentAngle = Math.atan2(y - centerY, x - centerX);
+                    x = centerX + Math.cos(currentAngle) * finalCenterRadius;
+                    y = centerY + Math.sin(currentAngle) * finalCenterRadius;
+                    console.log(`FORCED repositioning of ${nodeTemplate.name} outside center exclusion`);
+                }
+                
+                // Only avoid legend if directly overlapping
+                if (x > canvasWidth - legendWidth - 30 && y > canvasHeight - legendHeight - 30) {
+                    // Simple repositioning - move left or up
+                    if (canvasWidth - legendWidth - 50 > effectiveMargin) {
+                        x = canvasWidth - legendWidth - 50;
+                    } else {
+                        y = canvasHeight - legendHeight - 50;
+                    }
+                }
+                
+                layout.push({
+                    ...nodeTemplate,
+                    x: x,
+                    y: y
+                });
+            });
+        });
+        
+        // FINAL PASS: Aggressively move any nodes still too close to center (same as random layout)
+        const finalCenterRadius = isComplexDept ? centerRadius + 80 : centerRadius + 50;
+        for (let i = 0; i < layout.length; i++) {
+            const node = layout[i];
+            const distanceFromCenter = Math.sqrt(
+                Math.pow(node.x - centerX, 2) + Math.pow(node.y - centerY, 2)
+            );
+            
+            if (distanceFromCenter < finalCenterRadius) {
+                console.log(`GRID FINAL PASS: Moving ${node.name} away from center (distance: ${distanceFromCenter.toFixed(1)})`);
+                
+                // Calculate angle and push out to safe distance
+                const angle = Math.atan2(node.y - centerY, node.x - centerX);
+                const safeDistance = finalCenterRadius + 20;
+                
+                node.x = centerX + Math.cos(angle) * safeDistance;
+                node.y = centerY + Math.sin(angle) * safeDistance;
+                
+                // Ensure still within bounds
+                node.x = Math.max(margin, Math.min(node.x, canvasWidth - margin));
+                node.y = Math.max(margin, Math.min(node.y, canvasHeight - margin));
+            }
+        }
+        
+        return layout;
+    }
+
     generateRandomLayout(nodesToPlace, canvasWidth, canvasHeight, centerX, centerY) {
         const layout = [];
-        const margin = 60; // Increased margin to ensure content stays on screen
         
-        // Calculate legend exclusion zone (bottom-right corner)
-        const legendWidth = 200; // Estimated width including padding
-        const legendHeight = 180; // Estimated height including padding  
-        const legendMargin = 40; // Extra margin around legend for safety
+        // Get current department for complexity detection
+        const currentDept = this.vizNodes.find(n => n.type === 'central');
+        const partnerCount = nodesToPlace.length;
         
+        const isSmallDept = partnerCount <= 8;
+        const isComplexDept = currentDept && (
+            currentDept.name.includes('Visual Arts') || 
+            currentDept.name.includes('Performing Arts') ||
+            currentDept.name.includes('Modern Languages and Literatures')
+        );
+        const isVeryComplexDept = currentDept && (
+            currentDept.name.includes('School of Performing Arts') || 
+            currentDept.name.includes('School of Visual Arts and Design')
+        );
+        
+        // Adaptive margin with extra space for text buffer
+        const margin = isVeryComplexDept ? 40 : isComplexDept ? 60 : isSmallDept ? 40 : 50;
+        
+        // Calculate exclusion zones
+        const centerRadius = 160; // Much larger exclusion around department title
         const legendExclusionZone = {
-            left: canvasWidth - legendWidth - legendMargin,
+            left: canvasWidth - 280,
             right: canvasWidth,
-            top: canvasHeight - legendHeight - legendMargin,
+            top: canvasHeight - 220,
             bottom: canvasHeight
         };
         
-        const usableWidth = canvasWidth - (margin * 2);
+        // Legacy legend dimensions for compatibility
+        const legendWidth = 200;
+        const legendHeight = 180;
+        const legendMargin = 30;        const usableWidth = canvasWidth - (margin * 2);
         const usableHeight = canvasHeight - (margin * 2);
         const maxRadius = Math.min(usableWidth, usableHeight) / 2;
         
-        // Check if this is a complex department that needs more horizontal spread
-        const currentDept = this.vizNodes.find(n => n.type === 'central');
-        const isComplexDept = currentDept && (
-            currentDept.name.includes('Visual Arts') || 
-            currentDept.name.includes('Performing Arts')
-        );
+        // Enhanced spread for complex departments - balanced spacing for small departments
+        const verticalSpreadMultiplier = isVeryComplexDept ? 0.8 : isComplexDept ? 0.75 : isSmallDept ? 0.95 : 0.85;
+        const horizontalSpreadMultiplier = isVeryComplexDept ? 0.8 : isComplexDept ? 0.75 : isSmallDept ? 0.95 : 0.85;
+        const verticalSpread = canvasHeight * verticalSpreadMultiplier;
+        const horizontalSpread = canvasWidth * horizontalSpreadMultiplier;
         
-        // Use more aggressive horizontal spread for complex departments with many nodes
-        const verticalSpread = canvasHeight * (isComplexDept ? 0.6 : 0.5);
-        const horizontalSpread = canvasWidth * (isComplexDept ? 0.7 : 0.45); // Much wider for complex departments
-        
-        // Use staggered radial approach with controlled line lengths
+        // Enhanced sector count for complex departments - force more sectors for small departments to spread around
         const totalNodes = nodesToPlace.length;
-        const sectors = Math.max(isComplexDept ? 16 : 12, Math.ceil(totalNodes / 1.2)); // More sectors for complex departments
+        const baseSectors = isVeryComplexDept ? 24 : isComplexDept ? 20 : isSmallDept ? 20 : 16;
+        const sectors = Math.max(baseSectors, Math.ceil(totalNodes / 0.8)); // More aggressive sector creation
         const angleStep = (Math.PI * 2) / sectors;
         
         // Group nodes by type for better organization
@@ -1635,76 +1932,256 @@ class TronCircuitboard {
             'external': nodesToPlace.filter(n => n.type === 'external')
         };
         
-        // Define radius ranges with much wider spread for complex departments
+        // Enhanced radius ranges for complex departments (balanced radius for small departments)
+        const radiusMultiplier = isVeryComplexDept ? 1.15 : isComplexDept ? 1.05 : isSmallDept ? 1.2 : 1.0;
         const radiusRanges = {
             'degree': { 
-                min: maxRadius * 0.4, 
-                max: maxRadius * (isComplexDept ? 1.2 : 0.85), // Much wider for complex departments
-                verticalTier: -verticalSpread * 0.2,
-                tierVariation: verticalSpread * (isComplexDept ? 0.15 : 0.1)
+                min: Math.max(maxRadius * 0.3 * radiusMultiplier, (isComplexDept ? centerRadius + 60 : centerRadius + 40)), 
+                max: maxRadius * 0.6 * radiusMultiplier,
+                verticalTier: -verticalSpread * 0.15,
+                tierVariation: verticalSpread * (isComplexDept ? 0.12 : 0.1)
             },
             'internal': { 
-                min: maxRadius * 0.5, 
-                max: maxRadius * (isComplexDept ? 1.4 : 0.9), // Much wider for complex departments
+                min: Math.max(maxRadius * 0.5 * radiusMultiplier, (isComplexDept ? centerRadius + 60 : centerRadius + 40)), 
+                max: maxRadius * 0.8 * radiusMultiplier,
                 verticalTier: 0,
-                tierVariation: verticalSpread * (isComplexDept ? 0.12 : 0.08)
+                tierVariation: verticalSpread * (isComplexDept ? 0.1 : 0.08)
             },
             'external': { 
-                min: maxRadius * 0.6, 
-                max: maxRadius * (isComplexDept ? 1.6 : 0.95), // Much wider for complex departments
-                verticalTier: verticalSpread * 0.2,
-                tierVariation: verticalSpread * (isComplexDept ? 0.15 : 0.1)
+                min: Math.max(maxRadius * 0.7 * radiusMultiplier, (isComplexDept ? centerRadius + 60 : centerRadius + 40)),
+                max: maxRadius * 1.05 * radiusMultiplier,
+                verticalTier: verticalSpread * 0.15,
+                tierVariation: verticalSpread * (isComplexDept ? 0.12 : 0.1)
             }
         };
         
         let sectorIndex = 0;
         
-        // Place nodes in controlled staggered vertical pattern
+        // Place nodes with intelligent distribution to avoid overlap and use space efficiently
         Object.keys(nodesByType).forEach(nodeType => {
             nodesByType[nodeType].forEach((nodeTemplate, typeIndex) => {
                 const range = radiusRanges[nodeType];
                 
-                // Create 4 distinct radius tiers within each type for line length variety
-                const radiusTier = (typeIndex % 4) * (isComplexDept ? 0.2 : 0.15); // More variation for complex departments
-                const baseRadius = range.min + (range.max - range.min) * (0.2 + radiusTier);
-                
-                // Add more randomness for complex departments to spread them out
-                const randomnessMultiplier = isComplexDept ? 0.15 : 0.08;
+                // Enhanced radius tier variation for complex departments
+                const tierCount = isComplexDept ? 6 : 4;
+                const radiusTier = (typeIndex % tierCount) * (isComplexDept ? 0.12 : 0.15);
+                const baseRadius = range.min + (range.max - range.min) * (0.1 + radiusTier);
+                const randomnessMultiplier = isComplexDept ? 0.15 : 0.12; // Increased randomness to prevent overlap
                 const radius = baseRadius + (Math.random() - 0.5) * maxRadius * randomnessMultiplier;
                 
-                // Use sector-based angles with more variation for complex departments
-                const baseSector = (sectorIndex % sectors);
-                const baseAngle = baseSector * angleStep;
-                const angleVariationMultiplier = isComplexDept ? 0.8 : 0.6;
+                // More dynamic angular distribution with better spacing - force balanced quadrant usage for small departments
+                let baseSector, baseAngle;
+                if (isSmallDept && nodesByType[nodeType].length > 2) {
+                    // Force systematic quadrant distribution to prevent clustering
+                    const quadrant = typeIndex % 4;
+                    const sectorsPerQuadrant = Math.floor(sectors / 4);
+                    const quadrantStart = quadrant * sectorsPerQuadrant;
+                    const quadrantEnd = quadrantStart + sectorsPerQuadrant;
+                    baseSector = quadrantStart + Math.floor(Math.random() * sectorsPerQuadrant);
+                    baseAngle = baseSector * angleStep;
+                } else if (isSmallDept) {
+                    baseSector = Math.floor(Math.random() * sectors); // Random sector for small departments
+                    baseAngle = baseSector * angleStep;
+                } else {
+                    baseSector = (sectorIndex % sectors); // Sequential for others
+                    baseAngle = baseSector * angleStep;
+                }
+                
+                // Add progressive offset for same-type nodes to prevent overlap
+                const typeOffset = (typeIndex * Math.PI * 2) / Math.max(nodesByType[nodeType].length, 8);
+                const angleVariationMultiplier = isSmallDept ? 1.2 : isComplexDept ? 0.8 : 0.7; // More variation for small departments
                 const angleVariation = (Math.random() - 0.5) * angleStep * angleVariationMultiplier;
-                const angle = baseAngle + angleVariation;
+                let angle = baseAngle + typeOffset + angleVariation;
                 
-                // Calculate base position
-                const baseX = centerX + Math.cos(angle) * radius;
-                const baseY = centerY + Math.sin(angle) * radius;
+                // Calculate initial base position
+                let baseX = centerX + Math.cos(angle) * radius;
+                let baseY = centerY + Math.sin(angle) * radius;
                 
-                // Apply vertical tier positioning with more staggering for complex departments
-                const tierOffset = range.verticalTier + (typeIndex % 3 - 1) * range.tierVariation;
-                const horizontalJitterMultiplier = isComplexDept ? 0.08 : 0.03; // Much more horizontal jitter for complex departments
-                const horizontalJitter = (typeIndex % 7 - 3) * (horizontalSpread * horizontalJitterMultiplier); // More variation points
+                // Enhanced collision detection and repositioning for ALL departments
+                let repositionAttempts = 0;
+                const maxRepositionAttempts = isComplexDept ? 25 : isSmallDept ? 15 : 10;
                 
-                const x = baseX + horizontalJitter;
-                const y = baseY + tierOffset;
+                while (repositionAttempts < maxRepositionAttempts) {
+                    let hasCollision = false;
+                    
+                    // Check for center overlap FIRST - much larger exclusion for complex departments
+                    const distanceFromCenter = Math.sqrt(
+                        Math.pow(baseX - centerX, 2) + Math.pow(baseY - centerY, 2)
+                    );
+                    const effectiveCenterRadius = isComplexDept ? centerRadius + 60 : centerRadius + 30;
+                    if (distanceFromCenter < effectiveCenterRadius) {
+                        hasCollision = true;
+                        console.log(`Center collision detected for ${nodeTemplate.name}: distance=${distanceFromCenter.toFixed(1)}, threshold=${effectiveCenterRadius}`);
+                    }
+                    
+                    // Check for legend overlap
+                    if (!hasCollision && baseX >= legendExclusionZone.left && baseX <= legendExclusionZone.right &&
+                        baseY >= legendExclusionZone.top && baseY <= legendExclusionZone.bottom) {
+                        hasCollision = true;
+                    }
+                    
+                    // Check for screen boundaries with text buffer
+                    if (!hasCollision) {
+                        const textWidth = this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type) || 100;
+                        if (baseX - textWidth/2 < margin || baseX + textWidth/2 > canvasWidth - margin ||
+                            baseY < margin + 20 || baseY > canvasHeight - margin - 20) {
+                            hasCollision = true;
+                        }
+                    }
+                    
+                    // Check for collisions with already placed nodes (for ALL departments now)
+                    if (!hasCollision) {
+                        for (let existing of layout) {
+                            const distance = Math.sqrt(
+                                Math.pow(baseX - existing.x, 2) + Math.pow(baseY - existing.y, 2)
+                            );
+                            
+                            // MUCH more aggressive minimum distances for degree programs
+                            let requiredDistance;
+                            if (nodeTemplate.type === 'degree' && existing.type === 'degree') {
+                                requiredDistance = isComplexDept ? 180 : 150; // Force degree programs MUCH further apart
+                            } else if (nodeTemplate.type === 'degree' || existing.type === 'degree') {
+                                requiredDistance = isComplexDept ? 140 : 120; // Degree to non-degree spacing
+                            } else {
+                                // For non-degree nodes, calculate based on text size
+                                const textWidthA = this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type) || 100;
+                                const textWidthB = this.estimateTextWidth(existing.name, existing.type) || 100;
+                                requiredDistance = (textWidthA + textWidthB) / 2 + (isComplexDept ? 100 : 80);
+                            }
+                            
+                            if (distance < requiredDistance) {
+                                hasCollision = true;
+                                console.log(`Collision: ${nodeTemplate.name} too close to ${existing.name}, distance=${distance.toFixed(1)}, required=${requiredDistance}`);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!hasCollision) break;
+                    
+                    // Reposition: try a new random angle and radius
+                    const newQuadrant = Math.floor(Math.random() * 4);
+                    const sectorsPerQuadrant = Math.floor(sectors / 4);
+                    const quadrantStart = newQuadrant * sectorsPerQuadrant;
+                    const newBaseSector = quadrantStart + Math.floor(Math.random() * sectorsPerQuadrant);
+                    const newBaseAngle = newBaseSector * angleStep;
+                    
+                    const newTypeOffset = (Math.random() * Math.PI * 2) / Math.max(nodesByType[nodeType].length, 8);
+                    const newAngleVariation = (Math.random() - 0.5) * angleStep * 1.2;
+                    angle = newBaseAngle + newTypeOffset + newAngleVariation;
+                    
+                    // Try different radius within range, but ENSURE it's outside center exclusion
+                    const minRadiusFromCenter = (isComplexDept ? centerRadius + 80 : centerRadius + 50); // Even larger buffer for complex departments
+                    const adjustedMinRadius = Math.max(range.min, minRadiusFromCenter);
+                    
+                    // For degree programs, try to use MORE of the available space
+                    let radiusMultiplier = 1.0;
+                    if (nodeTemplate.type === 'degree') {
+                        radiusMultiplier = isComplexDept ? 1.4 : 1.2; // Push degree programs further out
+                    }
+                    
+                    const newRadius = adjustedMinRadius + (Math.random() * Math.max(0, range.max - adjustedMinRadius)) * radiusMultiplier;
+                    
+                    baseX = centerX + Math.cos(angle) * newRadius;
+                    baseY = centerY + Math.sin(angle) * newRadius;
+                    
+                    repositionAttempts++;
+                }
                 
-                // Ensure within bounds with adequate margin
-                const boundedPos = this.ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin);
+                // Enhanced tier positioning with better separation
+                const tierVariationMultiplier = isComplexDept ? 4 : 3;
+                const tierOffset = range.verticalTier + (typeIndex % tierVariationMultiplier - Math.floor(tierVariationMultiplier/2)) * range.tierVariation;
+                const horizontalJitterMultiplier = isComplexDept ? 0.12 : 0.1; // Increased jitter
+                const horizontalJitter = (typeIndex % (isComplexDept ? 7 : 5) - Math.floor((isComplexDept ? 7 : 5)/2)) * (horizontalSpread * horizontalJitterMultiplier);
+                
+                let x = baseX + horizontalJitter;
+                let y = baseY + tierOffset;
+                
+                // Add spacing check to prevent direct overlap
+                let attempts = 0;
+                while (attempts < 5) {
+                    let tooClose = false;
+                    for (let i = 0; i < layout.length; i++) {
+                        const existing = layout[i];
+                        const distance = Math.sqrt((x - existing.x) ** 2 + (y - existing.y) ** 2);
+                        const minDistance = 60; // Minimum distance between nodes
+                        
+                        if (distance < minDistance) {
+                            tooClose = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!tooClose) break;
+                    
+                    // Adjust position if too close
+                    const adjustAngle = Math.random() * Math.PI * 2;
+                    const adjustDistance = 80 + Math.random() * 40;
+                    x = baseX + Math.cos(adjustAngle) * adjustDistance;
+                    y = baseY + Math.sin(adjustAngle) * adjustDistance;
+                    attempts++;
+                }
+                
+                // Special handling for degrees with tracks - keep them closer to center for track visibility (reduced distance)
+                if (nodeTemplate.type === 'degree' && nodeTemplate.tracks && nodeTemplate.tracks.length > 0) {
+                    const distanceFromCenter = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                    const maxDistanceForTracks = Math.min(canvasWidth, canvasHeight) * 0.26; // Reduced from 28% to 26%
+                    
+                    if (distanceFromCenter > maxDistanceForTracks) {
+                        const currentAngle = Math.atan2(y - centerY, x - centerX);
+                        x = centerX + Math.cos(currentAngle) * maxDistanceForTracks;
+                        y = centerY + Math.sin(currentAngle) * maxDistanceForTracks;
+                    }
+                }
+                
+                // Enhanced bounds checking for complex departments
+                const effectiveMargin = isVeryComplexDept ? margin * 0.8 : margin;
+                x = Math.max(effectiveMargin, Math.min(x, canvasWidth - effectiveMargin));
+                y = Math.max(effectiveMargin, Math.min(y, canvasHeight - effectiveMargin));
+                
+                // Only avoid legend if directly overlapping
+                if (x > legendExclusionZone.left && y > legendExclusionZone.top) {
+                    // Simple repositioning - move left or up
+                    if (legendExclusionZone.left - effectiveMargin > effectiveMargin) {
+                        x = legendExclusionZone.left - 20;
+                    } else {
+                        y = legendExclusionZone.top - 20;
+                    }
+                }
                 
                 layout.push({
                     ...nodeTemplate,
-                    x: boundedPos.x,
-                    y: boundedPos.y,
-                    textWidth: this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type, isComplexDept),
-                    textHeight: this.estimateTextHeight(nodeTemplate.name, nodeTemplate.type, isComplexDept)
+                    x: x,
+                    y: y
                 });
                 
                 sectorIndex++;
             });
         });
+        
+        // FINAL PASS: Aggressively move any nodes still too close to center
+        const finalCenterRadius = isComplexDept ? centerRadius + 80 : centerRadius + 50;
+        for (let i = 0; i < layout.length; i++) {
+            const node = layout[i];
+            const distanceFromCenter = Math.sqrt(
+                Math.pow(node.x - centerX, 2) + Math.pow(node.y - centerY, 2)
+            );
+            
+            if (distanceFromCenter < finalCenterRadius) {
+                console.log(`FINAL PASS: Moving ${node.name} away from center (distance: ${distanceFromCenter.toFixed(1)})`);
+                
+                // Calculate angle and push out to safe distance
+                const angle = Math.atan2(node.y - centerY, node.x - centerX);
+                const safeDistance = finalCenterRadius + 20;
+                
+                node.x = centerX + Math.cos(angle) * safeDistance;
+                node.y = centerY + Math.sin(angle) * safeDistance;
+                
+                // Ensure still within bounds
+                node.x = Math.max(margin, Math.min(node.x, canvasWidth - margin));
+                node.y = Math.max(margin, Math.min(node.y, canvasHeight - margin));
+            }
+        }
         
         return layout;
     }
@@ -1742,8 +2219,8 @@ class TronCircuitboard {
         });
     }
 
-    scoreLayout(layout, canvasWidth, canvasHeight, isComplexDept = false) {
-        let score = 2000; // Start with higher base score
+    scoreLayout(layout, canvasWidth, canvasHeight, isComplexDept = false, isSmallDept = false) {
+        let score = 3000; // Higher base score for better layouts
         
         // Center coordinates for line intersection checks
         const centerX = canvasWidth / 2;
@@ -1755,69 +2232,94 @@ class TronCircuitboard {
             y: centerY,
             type: 'central',
             radius: 25,
-            name: 'Department Center'
+            textWidth: 200,
+            textHeight: 30
         };
         
-        // Enhanced penalty system prioritizing text readability
+        // Enhanced overlap detection with text bounds
         for (let i = 0; i < layout.length; i++) {
             const nodeA = layout[i];
             
-            // Check text boundaries with increased buffer
-            const textBounds = this.getTextBounds(nodeA, isComplexDept);
+            // Estimate text bounds more accurately
+            const textWidthA = this.estimateTextWidth(nodeA.name, nodeA.type);
+            const textHeightA = 20; // Standard text height
             
-            // Penalty for being too close to edges - more lenient for complex departments
-            const edgeMargin = isComplexDept ? 35 : 50; // Smaller margin for complex departments
-            const edgePenalty = isComplexDept ? 80 : 120; // Lower penalty for complex departments
-            if (textBounds.left < edgeMargin) score -= edgePenalty;
-            if (textBounds.right > canvasWidth - edgeMargin) score -= edgePenalty;
-            if (textBounds.top < edgeMargin) score -= edgePenalty;
-            if (textBounds.bottom > canvasHeight - edgeMargin) score -= edgePenalty;
+            // Check text overlap with central node
+            const centralOverlap = this.checkTextOverlap(
+                nodeA.x, nodeA.y, textWidthA, textHeightA,
+                centerX, centerY, 200, 30
+            );
+            if (centralOverlap) {
+                score -= 500; // Heavy penalty for central overlap
+            }
             
-            // CRITICAL: Prevent overlap with central node
-            const centralOverlapPenalty = this.calculateTextOverlapPenalty(nodeA, centralNode, isComplexDept);
-            score -= centralOverlapPenalty * 10; // Massive penalty for central overlap
-            
-            // CRITICAL: Prevent text overlap between nodes
+            // Check against other nodes
             for (let j = i + 1; j < layout.length; j++) {
                 const nodeB = layout[j];
-                const textOverlapPenalty = this.calculateTextOverlapPenalty(nodeA, nodeB, isComplexDept);
-                score -= textOverlapPenalty * (isComplexDept ? 12 : 8); // More severe penalty for complex departments
+                const textWidthB = this.estimateTextWidth(nodeB.name, nodeB.type);
+                const textHeightB = 20;
                 
-                // Additional penalty for nodes being too close (visual clustering)
-                const distance = Math.sqrt(Math.pow(nodeA.x - nodeB.x, 2) + Math.pow(nodeA.y - nodeB.y, 2));
-                const minDistance = isComplexDept ? 90 : 80; // Increased minimum distance for complex departments
+                // Check text overlap between nodes
+                const textOverlap = this.checkTextOverlap(
+                    nodeA.x, nodeA.y, textWidthA, textHeightA,
+                    nodeB.x, nodeB.y, textWidthB, textHeightB
+                );
+                
+                if (textOverlap) {
+                    score -= 300; // Heavy penalty for text overlap
+                }
+                
+                // Distance-based scoring for better distribution - good spacing for small departments
+                const distance = Math.sqrt((nodeA.x - nodeB.x) ** 2 + (nodeA.y - nodeB.y) ** 2);
+                const minDistance = Math.max(textWidthA, textWidthB) / 2 + (isSmallDept ? 100 : 40); // Good minimum safe distance for small departments
+                
                 if (distance < minDistance) {
-                    score -= (minDistance - distance) * (isComplexDept ? 3 : 2); // Higher penalty for complex departments
+                    score -= (minDistance - distance) * 2; // Penalty increases with proximity
+                } else if (distance > minDistance && distance < minDistance * 2) {
+                    score += 10; // Reward good spacing
                 }
             }
             
-            // Bonus for good spacing and line length variety
-            const distanceFromCenter = Math.sqrt(Math.pow(nodeA.x - centerX, 2) + Math.pow(nodeA.y - centerY, 2));
-            const idealDistance = this.getIdealDistance(nodeA.type, Math.min(canvasWidth, canvasHeight) / 2);
-            const distanceDiff = Math.abs(distanceFromCenter - idealDistance);
-            
-            // Reward appropriate distances with staggered bonus
-            score += Math.max(0, 30 - distanceDiff * 0.2);
-            
-            // Bonus for using the full canvas space effectively - higher bonus for complex departments
-            if (distanceFromCenter > idealDistance * 0.8) {
-                score += isComplexDept ? 35 : 20; // Higher reward for complex departments using outer space
+            // Bonus for using peripheral areas (better space utilization)
+            const distanceFromCenter = Math.sqrt((nodeA.x - centerX) ** 2 + (nodeA.y - centerY) ** 2);
+            const maxDistance = Math.min(canvasWidth, canvasHeight) / 2;
+            if (distanceFromCenter > maxDistance * 0.6) {
+                score += 50; // Bonus for spreading out
             }
             
-            // Additional bonus for complex departments that spread horizontally
-            if (isComplexDept) {
-                const horizontalDistanceFromCenter = Math.abs(nodeA.x - centerX);
-                const canvasHalfWidth = canvasWidth / 2;
-                if (horizontalDistanceFromCenter > canvasHalfWidth * 0.6) {
-                    score += 25; // Reward horizontal spread
-                }
+            // Penalty for being too close to edges (text cutoff risk)
+            const margin = 80;
+            if (nodeA.x < margin || nodeA.x > canvasWidth - margin ||
+                nodeA.y < margin || nodeA.y > canvasHeight - margin) {
+                score -= 200; // Penalty for edge proximity
             }
         }
         
         return score;
     }
     
-    // Helper function to get font size based on department complexity
+    checkTextOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
+        // Check if two text rectangles overlap
+        const left1 = x1 - w1/2;
+        const right1 = x1 + w1/2;
+        const top1 = y1 - h1/2;
+        const bottom1 = y1 + h1/2;
+        
+        const left2 = x2 - w2/2;
+        const right2 = x2 + w2/2;
+        const top2 = y2 - h2/2;
+        const bottom2 = y2 + h2/2;
+        
+        return !(right1 < left2 || left1 > right2 || bottom1 < top2 || top1 > bottom2);
+    }
+    
+    estimateTextWidth(text, nodeType) {
+        // More accurate text width estimation
+        const baseFontSize = nodeType === 'central' ? 16 : 12;
+        const charWidth = baseFontSize * 0.6; // Approximate character width
+        return Math.min(text.length * charWidth, 200); // Cap at 200px
+    }
+
     getFontSize(nodeType, isComplexDept = false) {
         if (nodeType === 'central') {
             return isComplexDept ? '20px' : '22px';
@@ -1851,7 +2353,7 @@ class TronCircuitboard {
                 y + height > legendZone.y);
     }
     
-    calculateTextOverlapPenalty(nodeA, nodeB, isComplexDept = false) {
+    calculateTextOverlapPenalty(nodeA, nodeB, isComplexDept = false, isSmallDept = false) {
         const boundsA = this.getTextBounds(nodeA, isComplexDept);
         const boundsB = this.getTextBounds(nodeB, isComplexDept);
         
@@ -1890,10 +2392,10 @@ class TronCircuitboard {
         
         const nodeRadiusA = nodeA.radius || 10;
         const nodeRadiusB = nodeB.radius || 10;
-        const minNodeDistance = nodeRadiusA + nodeRadiusB + (isComplexDept ? 50 : 40); // Increased minimum distance for complex departments
+        const minNodeDistance = nodeRadiusA + nodeRadiusB + (isSmallDept ? 90 : isComplexDept ? 50 : 40); // Good spacing for small departments
         
         if (nodeDistance < minNodeDistance) {
-            return (minNodeDistance - nodeDistance) * (isComplexDept ? 35 : 25); // Higher penalty for complex departments
+            return (minNodeDistance - nodeDistance) * (isSmallDept ? 60 : isComplexDept ? 35 : 25); // Higher penalty for small departments
         }
         
         // Additional penalty for text being too close (even without overlap) - enhanced for complex departments
@@ -1901,7 +2403,7 @@ class TronCircuitboard {
             Math.pow(nodeA.x - nodeB.x, 2) + Math.pow(nodeA.y - nodeB.y, 2)
         );
         
-        const minSafeDistance = (nodeA.textWidth + nodeB.textWidth) / 2 + (isComplexDept ? 100 : 80); // Increased safe distance for complex departments
+        const minSafeDistance = (nodeA.textWidth + nodeB.textWidth) / 2 + (isSmallDept ? 140 : isComplexDept ? 100 : 80); // Good safe distance for small departments
         if (centerDistance < minSafeDistance) {
             return (minSafeDistance - centerDistance) * (isComplexDept ? 15 : 12); // Higher penalty for complex departments
         }
@@ -2279,44 +2781,22 @@ class TronCircuitboard {
         return Math.min(maxLineWidth, maxWidth);
     }
 
-    ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin) {
-        // Check if this is a complex department that needs more space
-        const currentDept = this.vizNodes.find(n => n.type === 'central');
-        const isComplexDept = currentDept && (
-            currentDept.name.includes('Visual Arts') || 
-            currentDept.name.includes('Performing Arts')
-        );
+    ensureWithinBounds(x, y, canvasWidth, canvasHeight, margin = 50) {
+        // Enhanced bounds with much larger margins to prevent offscreen positioning
+        const textBuffer = 80; // Buffer for text width
+        const minX = margin + textBuffer;
+        const maxX = canvasWidth - margin - textBuffer;
+        const minY = margin + 30; // Extra buffer for text height
+        const maxY = canvasHeight - (margin + 80); // Large bottom margin for text
         
-        // Use smaller margins for complex departments to allow more spread
-        const effectiveMargin = isComplexDept ? margin * 0.7 : margin;
+        // Clamp to bounds with aggressive margins
+        const boundedX = Math.max(minX, Math.min(x, maxX));
+        const boundedY = Math.max(minY, Math.min(y, maxY));
         
-        // Define legend exclusion zone (bottom-right)
-        const legendZone = {
-            x: canvasWidth - 240, // 200px width + 40px margin
-            y: canvasHeight - 220, // 180px height + 40px margin
-            width: 240,
-            height: 220
+        return {
+            x: boundedX,
+            y: boundedY
         };
-        
-        // First apply basic canvas bounds with adjusted margins
-        let clampedX = Math.max(effectiveMargin, Math.min(x, canvasWidth - effectiveMargin));
-        let clampedY = Math.max(effectiveMargin, Math.min(y, canvasHeight - effectiveMargin));
-        
-        // Check if position is in legend exclusion zone
-        if (clampedX + 50 > legendZone.x && clampedY + 30 > legendZone.y) {
-            // For complex departments, try more aggressive repositioning
-            const moveDistance = isComplexDept ? 150 : 100;
-            
-            // Try to move left first
-            if (clampedX - moveDistance >= effectiveMargin) {
-                clampedX = clampedX - moveDistance;
-            } else {
-                // Move up if can't move left
-                clampedY = Math.max(effectiveMargin, legendZone.y - (isComplexDept ? 80 : 50));
-            }
-        }
-        
-        return { x: clampedX, y: clampedY };
     }
     
     placeTracksAroundDegree(degreeX, degreeY, degreeAngle, tracks, parentId, centerX, centerY, margin) {
