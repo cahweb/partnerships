@@ -340,6 +340,16 @@ class TronCircuitboard {
                 this.setFilter(null); // Clear filter on mouse leave
             });
         });
+        
+        // Add debug toggle functionality
+        const debugToggle = document.getElementById('debugToggle');
+        if (debugToggle) {
+            debugToggle.addEventListener('click', () => {
+                window.debugBounds = !window.debugBounds;
+                debugToggle.style.opacity = window.debugBounds ? '1' : '0.6';
+                console.log('Debug bounds:', window.debugBounds ? 'ON' : 'OFF');
+            });
+        }
     }
     
     resizeCanvas() {
@@ -2755,29 +2765,55 @@ class TronCircuitboard {
     }
     
     estimateTextWidth(text, nodeType = 'degree', isComplexDept = false) {
-        // Central nodes use 22px Orbitron bold and don't wrap
-        if (nodeType === 'central') {
-            const avgCharWidth = isComplexDept ? 12 : 14; // Smaller for complex departments
-            return text.length * avgCharWidth;
+        // Use actual canvas context for more accurate measurements
+        if (this.vizCtx) {
+            this.vizCtx.save();
+            
+            // Set the same font as used in rendering
+            if (nodeType === 'central') {
+                this.vizCtx.font = `bold ${this.getFontSize('central', isComplexDept)} Orbitron`;
+                const width = this.vizCtx.measureText(text).width;
+                this.vizCtx.restore();
+                return width;
+            } else {
+                this.vizCtx.font = `bold ${this.getFontSize(nodeType, isComplexDept)} Orbitron`;
+                
+                // For wrapped text, calculate based on actual wrapping
+                const lines = this.getWrappedLines(text, nodeType, isComplexDept);
+                let maxLineWidth = 0;
+                
+                for (const line of lines) {
+                    const lineWidth = this.vizCtx.measureText(line.trim()).width;
+                    maxLineWidth = Math.max(maxLineWidth, lineWidth);
+                }
+                
+                this.vizCtx.restore();
+                return maxLineWidth;
+            }
         }
         
-        // Match the actual wrapping widths used in rendering - smaller for complex departments
-        const maxWidth = nodeType === 'degree' ? 
-            (isComplexDept ? 95 : 110) : 
-            (isComplexDept ? 60 : 70);
+        // Fallback to old estimation method if no context available
+        if (nodeType === 'central') {
+            const avgCharWidth = isComplexDept ? 12 : 14;
+            return text.length * avgCharWidth;
+        }
         
         // For multi-line text, use the max width constraint
         const lines = this.getWrappedLines(text, nodeType, isComplexDept);
         let maxLineWidth = 0;
         
-        // Estimate each line's width - smaller text for complex departments
-        const avgCharWidth = isComplexDept ? 8.5 : 10; // Smaller for complex departments (15px vs 17px)
+        // Estimate each line's width
+        const avgCharWidth = isComplexDept ? 8.5 : 10;
         for (const line of lines) {
             const lineWidth = line.trim().length * avgCharWidth;
             maxLineWidth = Math.max(maxLineWidth, lineWidth);
         }
         
-        // Don't exceed the wrapping constraint
+        // Apply max width constraint
+        const maxWidth = nodeType === 'degree' ? 
+            (isComplexDept ? 95 : 110) : 
+            (isComplexDept ? 60 : 70);
+        
         return Math.min(maxLineWidth, maxWidth);
     }
 
@@ -3142,6 +3178,42 @@ class TronCircuitboard {
             this.vizCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
             this.vizCtx.fillRect(0, 0, this.vizCanvas.width, this.vizCanvas.height);
             
+            // DEBUG: Draw canvas bounds and safe zones
+            if (window.debugBounds) {
+                this.vizCtx.save();
+                
+                // Canvas bounds
+                this.vizCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                this.vizCtx.lineWidth = 2;
+                this.vizCtx.strokeRect(0, 0, this.vizCanvas.width, this.vizCanvas.height);
+                
+                // Safe margins (50px from edges)
+                const margin = 50;
+                this.vizCtx.strokeStyle = 'rgba(255, 255, 0, 0.4)';
+                this.vizCtx.lineWidth = 1;
+                this.vizCtx.setLineDash([10, 5]);
+                this.vizCtx.strokeRect(margin, margin, 
+                    this.vizCanvas.width - 2*margin, 
+                    this.vizCanvas.height - 2*margin);
+                
+                // Center exclusion zone
+                const centerX = this.vizCanvas.width / 2;
+                const centerY = this.vizCanvas.height / 2;
+                const centerRadius = 160;
+                this.vizCtx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                this.vizCtx.setLineDash([5, 5]);
+                this.vizCtx.beginPath();
+                this.vizCtx.arc(centerX, centerY, centerRadius, 0, Math.PI * 2);
+                this.vizCtx.stroke();
+                
+                // Legend exclusion zone
+                this.vizCtx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+                this.vizCtx.setLineDash([3, 3]);
+                this.vizCtx.strokeRect(this.vizCanvas.width - 280, this.vizCanvas.height - 250, 280, 250);
+                
+                this.vizCtx.restore();
+            }
+            
             // Update animation time
             this.animationTime += 0.033; // 30fps instead of 60fps
             
@@ -3413,6 +3485,30 @@ class TronCircuitboard {
         this.vizCtx.fill();
         this.vizCtx.stroke();
         
+        // DEBUG: Highlight nodes too close to canvas bounds
+        if (window.debugBounds) {
+            const margin = 50;
+            const canvasWidth = this.vizCanvas.width;
+            const canvasHeight = this.vizCanvas.height;
+            
+            let isNearBounds = false;
+            if (node.x < margin || node.x > canvasWidth - margin || 
+                node.y < margin || node.y > canvasHeight - margin) {
+                isNearBounds = true;
+            }
+            
+            if (isNearBounds) {
+                this.vizCtx.save();
+                this.vizCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; // Red warning
+                this.vizCtx.lineWidth = 3;
+                this.vizCtx.setLineDash([5, 5]); // Dashed line
+                this.vizCtx.beginPath();
+                this.vizCtx.arc(node.x, node.y, radius + 10, 0, Math.PI * 2);
+                this.vizCtx.stroke();
+                this.vizCtx.restore();
+            }
+        }
+        
         this.vizCtx.restore();
     }
     
@@ -3529,6 +3625,21 @@ class TronCircuitboard {
             lines.forEach((line, index) => {
                 this.vizCtx.fillText(line.trim(), textX, startY + index * lineHeight);
             });
+            
+            // DEBUG: Draw text bounding box for degree nodes
+            if (window.debugBounds) {
+                this.vizCtx.save();
+                this.vizCtx.strokeStyle = 'rgba(255, 0, 0, 0.5)'; // Semi-transparent red
+                this.vizCtx.lineWidth = 1;
+                this.vizCtx.setLineDash([2, 2]); // Dashed line
+                this.vizCtx.strokeRect(
+                    textX - textWidth/2, 
+                    startY - lineHeight/2, 
+                    textWidth, 
+                    textHeight
+                );
+                this.vizCtx.restore();
+            }
         } else if (node.type === 'degree-track') {
             // Degree track nodes with white font - smaller for complex departments
             const isComplexDept = this.isComplexDepartment();
@@ -3615,6 +3726,21 @@ class TronCircuitboard {
             lines.forEach((line, index) => {
                 this.vizCtx.fillText(line.trim(), textX, startY + index * lineHeight);
             });
+            
+            // DEBUG: Draw text bounding box for degree-track nodes
+            if (window.debugBounds) {
+                this.vizCtx.save();
+                this.vizCtx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; // Semi-transparent cyan
+                this.vizCtx.lineWidth = 1;
+                this.vizCtx.setLineDash([2, 2]); // Dashed line
+                this.vizCtx.strokeRect(
+                    textX - textWidth/2, 
+                    startY - lineHeight/2, 
+                    textWidth, 
+                    textHeight
+                );
+                this.vizCtx.restore();
+            }
         } else if (node.type === 'internal') {
             // Internal partner nodes with white font for consistency - smaller for complex departments
             const isComplexDept = this.isComplexDepartment();
@@ -3651,6 +3777,23 @@ class TronCircuitboard {
             lines.forEach((line, index) => {
                 this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
             });
+            
+            // DEBUG: Draw text bounding box for internal nodes
+            if (window.debugBounds) {
+                this.vizCtx.save();
+                this.vizCtx.strokeStyle = 'rgba(255, 255, 0, 0.5)'; // Semi-transparent yellow
+                this.vizCtx.lineWidth = 1;
+                this.vizCtx.setLineDash([2, 2]); // Dashed line
+                const textWidth = Math.max(...lines.map(line => this.vizCtx.measureText(line.trim()).width));
+                const textHeight = lines.length * lineHeight;
+                this.vizCtx.strokeRect(
+                    node.x - textWidth/2, 
+                    startY - lineHeight/2, 
+                    textWidth, 
+                    textHeight
+                );
+                this.vizCtx.restore();
+            }
         } else if (node.type === 'external') {
             // External partner nodes with white font for consistency - smaller for complex departments
             const isComplexDept = this.isComplexDepartment();
@@ -3687,6 +3830,23 @@ class TronCircuitboard {
             lines.forEach((line, index) => {
                 this.vizCtx.fillText(line.trim(), node.x, startY + index * lineHeight);
             });
+            
+            // DEBUG: Draw text bounding box for external nodes
+            if (window.debugBounds) {
+                this.vizCtx.save();
+                this.vizCtx.strokeStyle = 'rgba(0, 255, 0, 0.5)'; // Semi-transparent green
+                this.vizCtx.lineWidth = 1;
+                this.vizCtx.setLineDash([2, 2]); // Dashed line
+                const textWidth = Math.max(...lines.map(line => this.vizCtx.measureText(line.trim()).width));
+                const textHeight = lines.length * lineHeight;
+                this.vizCtx.strokeRect(
+                    node.x - textWidth/2, 
+                    startY - lineHeight/2, 
+                    textWidth, 
+                    textHeight
+                );
+                this.vizCtx.restore();
+            }
         }
         
         this.vizCtx.restore();
