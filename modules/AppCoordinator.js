@@ -43,6 +43,9 @@ export class AppCoordinator {
         // Setup animation skip
         this.setupAnimationSkip();
         
+        // Setup resize handling
+        this.setupResizeHandler();
+        
         // Start text animation sequence FIRST
         this.startTextAnimationSequence();
         
@@ -52,13 +55,88 @@ export class AppCoordinator {
         }, 1000); // Wait 1 second for text to appear
     }
     
+    setupResizeHandler() {
+        window.addEventListener('resize', () => {
+            this.handleGlobalResize();
+        });
+    }
+    
+    handleGlobalResize() {
+        // Handle any global UI elements that need repositioning
+        // The individual components handle their own resize logic
+        
+        // Reposition popup overlay if it's visible
+        if (this.popupOverlay && this.popupOverlay.classList.contains('show')) {
+            // Popup overlay is already responsive with CSS, but we can trigger
+            // a repaint if needed
+            this.popupOverlay.style.display = 'none';
+            this.popupOverlay.offsetHeight; // Force reflow
+            this.popupOverlay.style.display = '';
+        }
+        
+        // Update department info container positioning if visible
+        const deptInfoContainer = document.getElementById('deptInfoContainer');
+        if (deptInfoContainer && deptInfoContainer.style.display !== 'none') {
+            // Apply responsive scaling changes immediately
+            deptInfoContainer.style.transition = 'none';
+            deptInfoContainer.offsetHeight; // Force reflow
+            deptInfoContainer.style.transition = '';
+        }
+    }
+    
     async loadDepartmentData() {
         try {
-            const response = await fetch('new_data.json');
-            this.departmentData = await response.json();
-            console.log('Department data loaded successfully');
+            // Try multiple paths for the JSON file
+            const paths = ['./new_data.json', 'new_data.json', '/new_data.json'];
+            let loaded = false;
+            
+            for (const path of paths) {
+                try {
+                    const response = await fetch(path);
+                    if (response.ok) {
+                        this.departmentData = await response.json();
+                        console.log('Department data loaded successfully from:', path);
+                        loaded = true;
+                        break;
+                    }
+                } catch (e) {
+                    // Try next path
+                    continue;
+                }
+            }
+            
+            if (!loaded) {
+                throw new Error('Could not load from any path');
+            }
         } catch (error) {
             console.error('Error loading department data:', error);
+            console.warn('Using embedded fallback data for local development');
+            
+            // Fallback embedded data (minimal version)
+            this.departmentData = {
+                departments: [
+                    {
+                        id: "school-of-visual-arts-and-design",
+                        name: "School of Visual Arts and Design",
+                        degrees: ["Art BFA", "Architecture BSAS", "Digital Media and Game Design"],
+                        internalPartners: ["SVAD Gallery", "Maker Space"],
+                        externalPartners: ["Orlando Museum of Art", "CityArts"],
+                        highlights: [
+                            { title: "SVAD Gallery", url: "https://svad.cah.ucf.edu/gallery/" }
+                        ]
+                    },
+                    {
+                        id: "college-of-arts-and-humanities",
+                        name: "College of Arts and Humanities",
+                        degrees: ["Texts and Technology PhD", "Themed Experience MS"],
+                        internalPartners: ["CHDR", "LIFE at UCF"],
+                        externalPartners: ["National Endowment for the Arts"],
+                        highlights: [
+                            { title: "Veterans Legacy Program", url: "https://vlp.cah.ucf.edu/" }
+                        ]
+                    }
+                ]
+            };
         }
     }
     
@@ -73,6 +151,9 @@ export class AppCoordinator {
             this.departmentData.departments.forEach(dept => {
                 this.departmentMap[dept.id] = dept;
             });
+            console.log('Department map created:', Object.keys(this.departmentMap));
+        } else {
+            console.warn('No department data available for mapping');
         }
         
         // Department nodes

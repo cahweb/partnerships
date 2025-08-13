@@ -17,13 +17,63 @@ export class CircuitAnimation {
     
     setupCanvas() {
         this.resizeCanvas();
-        window.addEventListener('resize', () => this.resizeCanvas());
+        window.addEventListener('resize', () => this.handleResize());
     }
     
     resizeCanvas() {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
         this.generateGrid();
+    }
+    
+    handleResize() {
+        // Store current animation state
+        const wasRunning = this.isRunning;
+        const currentLines = [...this.lines];
+        const currentIntersections = [...this.intersections];
+        const currentPulses = [...this.pulses];
+        
+        // Resize canvas and regenerate grid
+        this.resizeCanvas();
+        
+        // If animation was running, regenerate lines with new canvas dimensions
+        if (wasRunning) {
+            this.lines = [];
+            this.intersections = [];
+            this.pulses = [];
+            
+            // Regenerate lines proportionally based on new canvas size
+            currentLines.forEach((line, index) => {
+                // Create new line with same progress but updated dimensions
+                const forcedEdge = index % 4;
+                this.createRandomLine(forcedEdge);
+                
+                // Apply the progress from the old line
+                if (this.lines[index]) {
+                    this.lines[index].progress = line.progress;
+                    // Update branches progress too
+                    this.lines[index].branches?.forEach((branch, branchIndex) => {
+                        if (line.branches && line.branches[branchIndex]) {
+                            branch.progress = line.branches[branchIndex].progress;
+                        }
+                    });
+                }
+            });
+            
+            // Recreate intersections for new line positions
+            this.lines.forEach(line => {
+                this.checkIntersections(line);
+            });
+        }
+        
+        // Clear and redraw immediately
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (wasRunning) {
+            this.drawGrid();
+            this.lines.forEach(line => this.drawLine(line));
+            this.drawIntersections();
+            this.drawPulses();
+        }
     }
     
     generateGrid() {

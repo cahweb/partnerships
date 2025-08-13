@@ -4,6 +4,26 @@ export class DataCard {
         this.departmentData = departmentData;
         this.eventBus = eventBus;
         this.currentCard = null;
+        
+        // Setup resize handling
+        this.setupResizeHandler();
+    }
+    
+    setupResizeHandler() {
+        window.addEventListener('resize', () => {
+            if (this.currentCard && this.currentCard.classList.contains('show')) {
+                this.handleResize();
+            }
+        });
+    }
+    
+    handleResize() {
+        // Reposition the card to ensure it stays centered and within viewport
+        setTimeout(() => {
+            if (this.currentCard) {
+                this.positionCard(this.currentCard);
+            }
+        }, 100); // Small delay to ensure DOM has updated
     }
     
     showDataCard(departmentId) {

@@ -18,6 +18,43 @@ export class DepartmentNodes {
             'Themed Experience',
             'Women\'s and Gender Studies'
         ];
+        
+        // Setup resize handling
+        this.setupResizeHandler();
+    }
+    
+    setupResizeHandler() {
+        window.addEventListener('resize', () => {
+            if (this.nodesGenerated && this.nodes.length > 0) {
+                this.handleResize();
+            }
+        });
+    }
+    
+    handleResize() {
+        // Recalculate positions based on new viewport size
+        const newPositions = this.calculateResponsivePositions();
+        
+        // Update each node's position smoothly
+        this.nodes.forEach((node, index) => {
+            if (newPositions[index]) {
+                const element = node.element;
+                const newPos = newPositions[index];
+                
+                // Update position with smooth transition
+                element.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+                element.style.left = newPos.x + 'px';
+                element.style.top = newPos.y + 'px';
+                
+                // Update stored position
+                node.position = newPos;
+                
+                // Remove transition after animation completes
+                setTimeout(() => {
+                    element.style.transition = '';
+                }, 300);
+            }
+        });
     }
     
     generateNodes() {

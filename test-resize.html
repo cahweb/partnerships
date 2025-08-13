@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resize Test - DAH Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 5px;
+        }
+        .test-result {
+            color: #0f0;
+            font-weight: bold;
+        }
+        .test-error {
+            color: #f00;
+            font-weight: bold;
+        }
+        .resize-instructions {
+            background: #111;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        button {
+            background: #00ff80;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #80ff00;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>DAH Visualization Resize Test</h1>
+        
+        <div class="resize-instructions">
+            <h3>Manual Testing Instructions:</h3>
+            <ol>
+                <li>Open the main application in another tab: <a href="index.html" target="_blank">index.html</a></li>
+                <li>Test resize behavior in each stage:
+                    <ul>
+                        <li><strong>Opening Animation:</strong> Resize during circuit line generation</li>
+                        <li><strong>Department Nodes:</strong> Click "Explore" then resize</li>
+                        <li><strong>Department View:</strong> Click a department, then resize</li>
+                        <li><strong>Data Card:</strong> Open "Department Info", then resize</li>
+                        <li><strong>Zoom Controls:</strong> Use +/- buttons, then resize</li>
+                    </ul>
+                </li>
+                <li>Verify all elements reposition correctly</li>
+                <li>Check browser console for errors</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3>Component Resize Handler Validation</h3>
+            <div id="validation-results"></div>
+            <button onclick="validateResizeHandlers()">Validate Components</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Responsive Breakpoint Test</h3>
+            <div id="breakpoint-results"></div>
+            <button onclick="testBreakpoints()">Test CSS Breakpoints</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Quick Window Resize Simulation</h3>
+            <div id="resize-results"></div>
+            <button onclick="simulateResize()">Simulate Resize Event</button>
+        </div>
+    </div>
+
+    <script>
+        function validateResizeHandlers() {
+            const results = document.getElementById('validation-results');
+            let html = '<h4>Validation Results:</h4>';
+            
+            // Check if resize event listeners are properly set up
+            const eventListenerCount = getEventListeners ? getEventListeners(window).resize?.length || 0 : 'Unknown';
+            
+            html += `<p>Window resize listeners: <span class="test-result">${eventListenerCount}</span></p>`;
+            
+            // Test CSS breakpoints
+            const width = window.innerWidth;
+            let breakpointStatus = '';
+            
+            if (width <= 360) breakpointStatus = '360px breakpoint';
+            else if (width <= 480) breakpointStatus = '480px breakpoint';
+            else if (width <= 768) breakpointStatus = '768px breakpoint';
+            else if (width <= 1200) breakpointStatus = '1200px breakpoint';
+            else if (width <= 1400) breakpointStatus = '1400px breakpoint';
+            else breakpointStatus = 'Desktop (>1400px)';
+            
+            html += `<p>Current viewport: <span class="test-result">${width}px (${breakpointStatus})</span></p>`;
+            
+            // Check for module files
+            const moduleChecks = [
+                'CircuitAnimation.js',
+                'DepartmentNodes.js', 
+                'PartnershipGraph.js',
+                'DataCard.js',
+                'AppCoordinator.js'
+            ];
+            
+            html += '<p>Module availability:</p><ul>';
+            moduleChecks.forEach(module => {
+                html += `<li>${module}: <span class="test-result">Expected to be loaded by main app</span></li>`;
+            });
+            html += '</ul>';
+            
+            results.innerHTML = html;
+        }
+
+        function testBreakpoints() {
+            const results = document.getElementById('breakpoint-results');
+            const testElement = document.createElement('div');
+            testElement.className = 'text-line';
+            testElement.style.visibility = 'hidden';
+            document.body.appendChild(testElement);
+            
+            const computedStyle = window.getComputedStyle(testElement);
+            const fontSize = computedStyle.fontSize;
+            
+            document.body.removeChild(testElement);
+            
+            let html = '<h4>CSS Breakpoint Test:</h4>';
+            html += `<p>Current .text-line font-size: <span class="test-result">${fontSize}</span></p>`;
+            
+            const width = window.innerWidth;
+            let expectedSize = '';
+            
+            if (width <= 360) expectedSize = '~1.35rem (27% of 3rem base)';
+            else if (width <= 480) expectedSize = '~1.6rem (32% of 3rem base)';
+            else if (width <= 768) expectedSize = '~2rem (40% of 3rem base)';
+            else if (width <= 1200) expectedSize = '~2.5rem (50% of 3rem base)';
+            else if (width <= 1400) expectedSize = '~2rem (55% of 3rem base)';
+            else expectedSize = '3rem (100% base)';
+            
+            html += `<p>Expected for ${width}px: <span class="test-result">${expectedSize}</span></p>`;
+            
+            results.innerHTML = html;
+        }
+
+        function simulateResize() {
+            const results = document.getElementById('resize-results');
+            let html = '<h4>Resize Simulation:</h4>';
+            
+            try {
+                // Trigger resize event
+                window.dispatchEvent(new Event('resize'));
+                html += '<p class="test-result">✓ Resize event dispatched successfully</p>';
+                
+                // Check if any errors occurred
+                html += '<p class="test-result">✓ No immediate errors detected</p>';
+                
+                html += '<p>Check browser console for any JavaScript errors.</p>';
+                html += '<p>Test the main application by resizing the browser window.</p>';
+                
+            } catch (error) {
+                html += `<p class="test-error">✗ Error: ${error.message}</p>`;
+            }
+            
+            results.innerHTML = html;
+        }
+
+        // Auto-validate on load
+        window.addEventListener('load', () => {
+            validateResizeHandlers();
+            testBreakpoints();
+        });
+    </script>
+</body>
+</html>

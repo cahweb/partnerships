@@ -46,7 +46,7 @@ export class PartnershipGraph {
     
     setupCanvas() {
         this.resizeCanvas();
-        window.addEventListener('resize', () => this.resizeCanvas());
+        window.addEventListener('resize', () => this.handleResize());
     }
     
     resizeCanvas() {
@@ -59,6 +59,54 @@ export class PartnershipGraph {
                 .x(this.canvas.width / 2)
                 .y(this.canvas.height / 2);
             this.simulation.alpha(0.3).restart();
+        }
+    }
+    
+    handleResize() {
+        // Resize canvas first
+        this.resizeCanvas();
+        
+        // If we have nodes, update their positions and forces based on new dimensions
+        if (this.simulation && this.vizNodes.length > 0) {
+            // Update radial force with new canvas dimensions
+            const radialForce = d3.forceRadial()
+                .radius(d => {
+                    const baseMaxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.45;
+                    const maxRadius = baseMaxRadius * this.zoomLevel;
+                    switch(d.type) {
+                        case 'central': return 0;
+                        case 'degree': return maxRadius * 0.50;
+                        case 'internal': return maxRadius * 0.70;
+                        case 'external': return maxRadius * 0.90;
+                        default: return maxRadius * 0.75;
+                    }
+                })
+                .x(this.canvas.width / 2)
+                .y(this.canvas.height / 2)
+                .strength(0.8);
+            
+            this.simulation.force('radial', radialForce);
+            
+            // Update collision force if zoom has been applied
+            if (this.vizNodes.some(node => node.zoomApplied)) {
+                this.simulation.force('collide', d3.forceCollide()
+                    .radius(d => (d.radius + 60) * this.zoomLevel)
+                    .strength(0.9));
+            }
+            
+            // Update link force distance based on canvas size
+            const linkDistance = Math.min(this.canvas.width, this.canvas.height) * 0.15;
+            this.simulation.force('link', d3.forceLink(this.vizLinks)
+                .id(d => d.id)
+                .distance(linkDistance)
+                .strength(0.3));
+            
+            // Restart simulation with higher alpha for repositioning
+            this.simulation.alpha(0.5).restart();
+            
+            // Clear and redraw immediately
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.render();
         }
     }
     
