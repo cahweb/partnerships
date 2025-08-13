@@ -305,32 +305,55 @@ body, html {
 }
 
 .data-card-header {
-    position: sticky;
+    position: absolute;
     top: 0;
-    background: rgba(0, 20, 40, 0.95);
+    left: 0;
+    right: 0;
+    background: rgba(0, 20, 40, 0.98);
     padding: 15px 20px;
-    border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+    border-bottom: 2px solid rgba(0, 255, 255, 0.4);
     display: flex;
-    justify-content: flex-end;
-    backdrop-filter: blur(10px);
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(15px);
+    z-index: 10;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.data-card-title {
+    color: #00ffff;
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 0;
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    font-family: 'Orbitron', monospace;
 }
 
 .data-card-close {
-    background: none;
-    border: none;
+    background: rgba(0, 255, 255, 0.1);
+    border: 2px solid #00ffff;
     color: #00ffff;
-    font-size: 24px;
+    font-size: 28px;
     font-weight: bold;
     cursor: pointer;
-    padding: 5px 10px;
+    padding: 8px 12px;
     border-radius: 50%;
     transition: all 0.3s ease;
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-family: 'Orbitron', monospace;
 }
 
 .data-card-close:hover {
-    background: rgba(255, 0, 0, 0.2);
-    color: #ff4444;
-    transform: scale(1.1);
+    background: rgba(0, 255, 255, 0.3);
+    color: #ffffff;
+    transform: scale(1.15);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+    border-color: #66ffff;
 }
 
 /* Custom Neon Scrollbar */
@@ -367,7 +390,7 @@ body, html {
 }
 
 .data-card-content {
-    padding: 20px 25px 30px 25px;
+    padding: 80px 25px 30px 25px; /* Increased top padding to account for fixed header */
     color: #ffffff;
     font-family: 'Orbitron', monospace;
 }
@@ -750,6 +773,59 @@ body, html {
 .legend-color.external {
     background: #ff00ff;  /* Solid magenta to match external lines */
     color: #ff00ff;
+}
+
+/* Zoom Controls */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(0, 255, 255, 0.3);
+}
+
+.zoom-button {
+    background: rgba(0, 255, 255, 0.1);
+    border: 2px solid #00ffff;
+    color: #00ffff;
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: bold;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    user-select: none;
+    line-height: 1;
+}
+
+.zoom-button:hover {
+    background: rgba(0, 255, 255, 0.3);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+    transform: scale(1.1);
+    border-color: #ffffff;
+}
+
+.zoom-button:active {
+    transform: scale(1.05);
+    background: rgba(0, 255, 255, 0.4);
+}
+
+.zoom-label {
+    color: #00ffff;
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    text-shadow: 0 0 5px #00ffff;
+    margin: 0 5px;
+    min-width: 40px;
+    text-align: center;
 }
 
 /* Main canvas fade out state */
@@ -1163,23 +1239,181 @@ body, html {
     animation: pulse 2s infinite;
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
+/* Aggressive font size reduction for screens under 1400px */
+@media (max-width: 1400px) {
     .text-line {
-        font-size: 1.35rem; /* 2/3 of 2rem */
-        padding: 8px 14px; /* Reduced padding */
-        margin-bottom: 8px; /* Reduced margin */
-        letter-spacing: 0.7px; /* Reduced letter spacing */
+        font-size: 2rem; /* Reduced from 3rem */
+        padding: 10px 18px;
+        margin-bottom: 10px;
+        letter-spacing: 1px;
     }
     
     .digital-text {
-        font-size: 1.5rem;
+        font-size: 1.8rem; /* Reduced from 2.5rem */
+        top: -35px;
+        letter-spacing: 1.5px;
+    }
+    
+    .neon-node {
+        font-size: 0.77rem; /* Additional 30% reduction from 1.1rem */
+        padding: 8px 14px;
+        max-width: 200px;
+        letter-spacing: 0.6px;
+    }
+    
+    .partner-label {
+        font-size: 8px; /* Aggressive reduction (33% from 12px) */
+    }
+    
+    .focused-label {
+        font-size: 11px; /* Aggressive reduction (31% from 16px) */
+    }
+    
+    .viz-legend h4 {
+        font-size: 13px; /* Aggressive reduction (35% from 20px) */
+    }
+    
+    .legend-item {
+        font-size: 12px; /* Aggressive reduction (33% from 18px) */
+        padding: 5px 8px;
+    }
+    
+    .zoom-button {
+        font-size: 16px; /* Reduced from 18px */
+        width: 32px; /* Reduced from 35px */
+        height: 32px; /* Reduced from 35px */
+    }
+    
+    .zoom-label {
+        font-size: 12px; /* Reduced from 14px */
+    }
+    
+    .data-card .card-title {
+        font-size: 1.5rem; /* Reduced from 1.8rem */
+    }
+    
+    /* Secondary visualization responsive elements */
+    .focused-node {
+        stroke-width: 2.5; /* Reduced from 3 */
+        filter: drop-shadow(0 0 15px #ff6600);
+    }
+    
+    .partner-node {
+        stroke-width: 1.5; /* Reduced from 2 */
+    }
+    
+    .internal-partner-node,
+    .external-partner-node {
+        filter: drop-shadow(0 0 8px currentColor); /* Reduced from 10px */
+    }
+    
+    /* Responsive node pulse animation */
+    @keyframes nodePulse {
+        from {
+            filter: drop-shadow(0 0 15px #ff6600); /* Reduced from 20px */
+        }
+        to {
+            filter: drop-shadow(0 0 25px #ff6600); /* Reduced from 30px */
+        }
+    }
+}
+
+/* Further reduction for screens under 1200px */
+@media (max-width: 1200px) {
+    .text-line {
+        font-size: 1.7rem; /* More aggressive reduction */
+        padding: 8px 16px;
+        margin-bottom: 8px;
+        letter-spacing: 0.8px;
+    }
+    
+    .digital-text {
+        font-size: 1.5rem; /* More aggressive reduction */
         top: -30px;
     }
     
+    .neon-node {
+        font-size: 0.7rem; /* Additional 30% reduction from 1rem */
+        padding: 6px 12px;
+        max-width: 180px;
+        letter-spacing: 0.4px;
+    }
+    
+    .data-card .card-title {
+        font-size: 1.4rem; /* More aggressive reduction */
+    }
+    
+    .viz-legend h4 {
+        font-size: 11px; /* Very aggressive reduction (45% from 20px) */
+    }
+    
+    .legend-item {
+        font-size: 10px; /* Very aggressive reduction (44% from 18px) */
+        padding: 4px 6px;
+    }
+    
+    .zoom-button {
+        font-size: 14px; /* Further reduced */
+        width: 28px; /* Further reduced */
+        height: 28px; /* Further reduced */
+    }
+    
+    .zoom-label {
+        font-size: 10px; /* Further reduced */
+    }
+    
+    .partner-label {
+        font-size: 7px; /* Very aggressive reduction (42% from 12px) */
+    }
+    
+    .focused-label {
+        font-size: 9px; /* Very aggressive reduction (44% from 16px) */
+    }
+    
+    /* Secondary visualization responsive elements */
+    .focused-node {
+        stroke-width: 2; /* Further reduced from 3 */
+        filter: drop-shadow(0 0 12px #ff6600);
+    }
+    
+    .partner-node {
+        stroke-width: 1.2; /* Further reduced from 2 */
+    }
+    
+    .internal-partner-node,
+    .external-partner-node {
+        filter: drop-shadow(0 0 6px currentColor); /* Further reduced from 10px */
+    }
+    
+    /* Responsive node pulse animation */
+    @keyframes nodePulse {
+        from {
+            filter: drop-shadow(0 0 12px #ff6600); /* Further reduced */
+        }
+        to {
+            filter: drop-shadow(0 0 20px #ff6600); /* Further reduced */
+        }
+    }
+}
+
+@media (max-width: 768px) {
+    .text-line {
+        font-size: 1.4rem; /* Much more aggressive reduction */
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        letter-spacing: 0.6px;
+    }
+    
+    .digital-text {
+        font-size: 1.2rem; /* Much more aggressive reduction */
+        top: -25px;
+        letter-spacing: 1px;
+    }
+    
     .neon-button {
-        font-size: 1rem;
-        padding: 12px 25px;
+        font-size: 0.9rem;
+        padding: 10px 20px;
+        letter-spacing: 1px;
     }
     
     #buttonContainer {
@@ -1187,10 +1421,11 @@ body, html {
     }
     
     .neon-node {
-        font-size: 0.8rem;
-        padding: 10px 16px;
-        max-width: 200px;
-        min-width: 100px;
+        font-size: 0.56rem; /* Additional 30% reduction from 0.8rem */
+        padding: 6px 10px;
+        max-width: 160px;
+        min-width: 80px;
+        letter-spacing: 0.3px;
     }
     
     .infocard {
@@ -1204,8 +1439,8 @@ body, html {
     }
     
     .dept-info-button {
-        font-size: 12px;
-        padding: 10px 16px;
+        font-size: 14px; /* Increased from 12px */
+        padding: 12px 18px;
     }
     
     .viz-area {
@@ -1214,65 +1449,124 @@ body, html {
     }
     
     .back-button {
-        font-size: 0.9rem;
-        padding: 10px 18px;
+        font-size: 1rem; /* Increased from 0.9rem */
+        padding: 12px 20px;
         top: 20px;
         right: 20px;
     }
     
     .card-title {
-        font-size: 1.5rem;
+        font-size: 1.2rem; /* More aggressive reduction */
     }
     
     .section-title {
-        font-size: 1rem;
+        font-size: 0.9rem; /* Reduced from 1rem */
     }
     
     .section-content {
-        font-size: 0.8rem;
+        font-size: 0.75rem; /* More aggressive reduction */
     }
     
     .featured-preview {
-        height: 250px;
+        height: 180px; /* Further reduced */
     }
     
     .featured-title {
-        font-size: 1.1rem;
+        font-size: 1rem; /* Reduced from 1.1rem */
+    }
+    
+    .viz-legend h4 {
+        font-size: 10px; /* Extremely aggressive reduction (50% from 20px) */
+    }
+    
+    .legend-item {
+        font-size: 9px; /* Extremely aggressive reduction (50% from 18px) */
+        padding: 3px 6px;
+    }
+    
+    .zoom-button {
+        font-size: 12px; /* Mobile reduction */
+        width: 25px; /* Mobile reduction */
+        height: 25px; /* Mobile reduction */
+    }
+    
+    .zoom-label {
+        font-size: 9px; /* Mobile reduction */
+        min-width: 30px;
+    }
+    
+    .zoom-controls {
+        gap: 6px; /* Reduced gap on mobile */
+        margin-top: 12px;
+        padding-top: 12px;
+    }
+    
+    .partner-label {
+        font-size: 6px; /* Extremely aggressive reduction (50% from 12px) */
+    }
+    
+    .focused-label {
+        font-size: 8px; /* Extremely aggressive reduction (50% from 16px) */
+    }
+    
+    /* Secondary visualization responsive elements */
+    .focused-node {
+        stroke-width: 1.5; /* Mobile reduction from 3 */
+        filter: drop-shadow(0 0 10px #ff6600);
+    }
+    
+    .partner-node {
+        stroke-width: 1; /* Mobile reduction from 2 */
+    }
+    
+    .internal-partner-node,
+    .external-partner-node {
+        filter: drop-shadow(0 0 5px currentColor); /* Mobile reduction from 10px */
+    }
+    
+    /* Responsive node pulse animation */
+    @keyframes nodePulse {
+        from {
+            filter: drop-shadow(0 0 10px #ff6600); /* Mobile reduced */
+        }
+        to {
+            filter: drop-shadow(0 0 15px #ff6600); /* Mobile reduced */
+        }
     }
 }
 
 @media (max-width: 480px) {
     .text-line {
-        font-size: 1rem; /* 2/3 of 1.5rem */
-        letter-spacing: 0.3px; /* Reduced letter spacing */
-        padding: 7px 10px; /* Reduced padding */
-        margin-bottom: 7px; /* Reduced margin */
-        border-radius: 4px; /* Smaller border radius */
+        font-size: 1rem; /* Very aggressive reduction for small screens */
+        letter-spacing: 0.3px;
+        padding: 6px 10px;
+        margin-bottom: 6px;
+        border-radius: 4px;
     }
     
     .digital-text {
-        font-size: 1.1rem;
-        top: -25px;
-        letter-spacing: 2px;
+        font-size: 0.9rem; /* Very aggressive reduction */
+        top: -20px;
+        letter-spacing: 0.8px;
     }
     
     .neon-button {
-        font-size: 0.9rem;
-        padding: 10px 20px;
-        letter-spacing: 1px;
+        font-size: 0.8rem; /* Further reduced */
+        padding: 8px 16px;
+        letter-spacing: 0.8px;
     }
     
     #buttonContainer {
-        bottom: 10%;
+        bottom: 12%;
     }
     
     .neon-node {
-        font-size: 0.7rem;
-        padding: 8px 12px;
-        border-radius: 20px;
-        max-width: 160px;
-        min-width: 80px;
-        letter-spacing: 0.5px;
+        font-size: 0.45rem; /* Additional 30% reduction from 0.65rem */
+        padding: 5px 8px;
+        border-radius: 14px;
+        max-width: 120px;
+        min-width: 60px;
+        letter-spacing: 0.2px;
     }
     
     .infocard {
@@ -1282,56 +1576,265 @@ body, html {
     }
     
     .data-card-content {
-        padding: 20px 15px;
+        padding: 70px 15px 18px 15px; /* Account for fixed header on mobile */
+    }
+    
+    .data-card-title {
+        font-size: 1.1rem;
+    }
+    
+    .data-card-close {
+        width: 40px;
+        height: 40px;
+        font-size: 24px;
     }
     
     .back-button {
-        font-size: 0.8rem;
+        font-size: 0.85rem; /* Increased from 0.8rem */
         padding: 8px 15px;
         top: 15px;
         right: 15px;
     }
     
     .card-title {
-        font-size: 1.3rem;
-        margin-bottom: 15px;
+        font-size: 1rem; /* Very aggressive reduction */
+        margin-bottom: 12px;
     }
     
     .section-title {
-        font-size: 0.9rem;
+        font-size: 0.8rem; /* More aggressive reduction */
     }
     
     .section-content {
-        font-size: 0.75rem;
+        font-size: 0.65rem; /* Very aggressive reduction */
     }
     
     .tech-course {
-        font-size: 0.7rem;
-        padding: 3px 6px;
-        margin: 3px 3px 3px 0;
+        font-size: 0.6rem; /* Further reduced */
+        padding: 2px 5px;
+        margin: 2px 2px 2px 0;
     }
     
     .close-button {
-        font-size: 1.5rem;
-        top: 10px;
-        right: 15px;
+        font-size: 1.3rem;
+        top: 8px;
+        right: 12px;
     }
     
     .featured-preview {
-        height: 200px;
+        height: 140px; /* Further reduced */
     }
     
     .featured-title {
-        font-size: 1rem;
-        margin-bottom: 10px;
+        font-size: 0.85rem; /* More aggressive reduction */
+        margin-bottom: 8px;
     }
     
     .partner-label {
-        font-size: 10px;
+        font-size: 5px; /* Ultra aggressive reduction (58% from 12px) */
     }
     
     .focused-label {
-        font-size: 14px;
+        font-size: 6px; /* Ultra aggressive reduction (62% from 16px) */
+    }
+    
+    .dept-info-button {
+        font-size: 10px; /* More aggressive reduction */
+        padding: 8px 12px;
+    }
+    
+    .viz-legend h4 {
+        font-size: 8px; /* Ultra aggressive reduction (60% from 20px) */
+    }
+    
+    .legend-item {
+        font-size: 7px; /* Ultra aggressive reduction (61% from 18px) */
+        padding: 2px 4px;
+    }
+    
+    .zoom-button {
+        font-size: 10px; /* Small screen reduction */
+        width: 22px; /* Small screen reduction */
+        height: 22px; /* Small screen reduction */
+    }
+    
+    .zoom-label {
+        font-size: 8px; /* Small screen reduction */
+        min-width: 25px;
+    }
+    
+    .zoom-controls {
+        gap: 4px; /* Further reduced gap */
+        margin-top: 10px;
+        padding-top: 10px;
+    }
+    
+    /* Secondary visualization responsive elements */
+    .focused-node {
+        stroke-width: 1.2; /* Small screen reduction from 3 */
+        filter: drop-shadow(0 0 8px #ff6600);
+    }
+    
+    .partner-node {
+        stroke-width: 0.8; /* Small screen reduction from 2 */
+    }
+    
+    .internal-partner-node,
+    .external-partner-node {
+        filter: drop-shadow(0 0 4px currentColor); /* Small screen reduction from 10px */
+    }
+    
+    /* Responsive node pulse animation */
+    @keyframes nodePulse {
+        from {
+            filter: drop-shadow(0 0 8px #ff6600); /* Small screen reduced */
+        }
+        to {
+            filter: drop-shadow(0 0 12px #ff6600); /* Small screen reduced */
+        }
+    }
+}
+
+/* Extra small screens - very low resolution */
+@media (max-width: 360px) {
+    .text-line {
+        font-size: 0.85rem; /* Extremely aggressive reduction */
+        letter-spacing: 0.2px;
+        padding: 5px 8px;
+        margin-bottom: 5px;
+        border-radius: 3px;
+    }
+    
+    .digital-text {
+        font-size: 0.75rem; /* Extremely aggressive reduction */
+        top: -18px;
+        letter-spacing: 0.5px;
+    }
+    
+    .neon-button {
+        font-size: 0.7rem; /* Extremely aggressive reduction */
+        padding: 6px 12px;
+        letter-spacing: 0.3px;
+    }
+    
+    .neon-node {
+        font-size: 0.38rem; /* Additional 30% reduction from 0.55rem */
+        padding: 4px 6px;
+        max-width: 100px;
+        min-width: 50px;
+        letter-spacing: 0.1px;
+    }
+    
+    .dept-info-button {
+        font-size: 8px; /* Extremely aggressive reduction */
+        padding: 6px 10px;
+    }
+    
+    .back-button {
+        font-size: 0.6rem; /* Extremely aggressive reduction */
+        padding: 5px 10px;
+        top: 8px;
+        right: 8px;
+    }
+    
+    .card-title {
+        font-size: 0.9rem; /* Extremely aggressive reduction */
+        margin-bottom: 10px;
+    }
+    
+    .section-title {
+        font-size: 0.7rem; /* Extremely aggressive reduction */
+    }
+    
+    .section-content {
+        font-size: 0.55rem; /* Extremely aggressive reduction */
+    }
+    
+    .partner-label {
+        font-size: 4px; /* Maximum aggressive reduction (67% from 12px) */
+    }
+    
+    .focused-label {
+        font-size: 5px; /* Maximum aggressive reduction (69% from 16px) */
+    }
+    
+    .viz-legend h4 {
+        font-size: 7px; /* Maximum aggressive reduction (65% from 20px) */
+    }
+    
+    .legend-item {
+        font-size: 6px; /* Maximum aggressive reduction (67% from 18px) */
+        padding: 1px 3px;
+    }
+    
+    .zoom-button {
+        font-size: 9px; /* Ultra small screen reduction */
+        width: 20px; /* Ultra small screen reduction */
+        height: 20px; /* Ultra small screen reduction */
+    }
+    
+    .zoom-label {
+        font-size: 7px; /* Ultra small screen reduction */
+        min-width: 20px;
+    }
+    
+    .zoom-controls {
+        gap: 3px; /* Minimal gap */
+        margin-top: 8px;
+        padding-top: 8px;
+    }
+    
+    .featured-preview {
+        height: 120px; /* Further reduced */
+    }
+    
+    .featured-title {
+        font-size: 0.75rem; /* Extremely aggressive reduction */
+    }
+    
+    .popup-title {
+        font-size: 0.8rem; /* More aggressive reduction */
+    }
+    
+    .popup-close {
+        width: 28px;
+        height: 28px;
+        font-size: 1.1rem;
+    }
+    
+    .data-card-title {
+        font-size: 0.85rem; /* Extremely aggressive reduction */
+    }
+    
+    .data-card-close {
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+    }
+    
+    /* Secondary visualization responsive elements */
+    .focused-node {
+        stroke-width: 1; /* Ultra small screen reduction from 3 */
+        filter: drop-shadow(0 0 6px #ff6600);
+    }
+    
+    .partner-node {
+        stroke-width: 0.6; /* Ultra small screen reduction from 2 */
+    }
+    
+    .internal-partner-node,
+    .external-partner-node {
+        filter: drop-shadow(0 0 3px currentColor); /* Ultra small screen reduction from 10px */
+    }
+    
+    /* Responsive node pulse animation */
+    @keyframes nodePulse {
+        from {
+            filter: drop-shadow(0 0 6px #ff6600); /* Ultra small screen reduced */
+        }
+        to {
+            filter: drop-shadow(0 0 9px #ff6600); /* Ultra small screen reduced */
+        }
     }
 }
 

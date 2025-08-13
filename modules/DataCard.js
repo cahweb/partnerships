@@ -16,12 +16,23 @@ export class DataCard {
         // Remove existing card if any
         this.hideDataCard();
         
-        // Create new card
-        const card = document.createElement('div');
+        // Use the existing data card from HTML instead of creating new one
+        const card = document.getElementById('dataCard');
         card.className = 'data-card show';
-        card.innerHTML = this.generateCardContent(dept);
         
-        this.container.appendChild(card);
+        // Update the title
+        const titleElement = document.getElementById('dataCardTitle');
+        if (titleElement) {
+            titleElement.textContent = dept.name;
+        }
+        
+        // Update only the content area, preserving the header
+        const contentElement = document.getElementById('dataCardContent');
+        if (contentElement) {
+            contentElement.innerHTML = this.generateCardContent(dept);
+        }
+        
+        // Don't append to container since it already exists in DOM
         this.currentCard = card;
         
         // Setup event handlers
@@ -83,16 +94,20 @@ export class DataCard {
             content += '</div></div>';
         }
         
-        // Close button
-        content += '<button class="close-card">&times;</button>';
+        // No close button needed here - it's in the header
         
         return content;
     }
     
     setupCardInteractions(card, dept) {
-        // Close button
-        const closeBtn = card.querySelector('.close-card');
-        closeBtn.addEventListener('click', () => this.hideDataCard());
+        // Close button - use the existing one in the header
+        const closeBtn = document.getElementById('dataCardClose');
+        if (closeBtn) {
+            // Remove any existing event listeners
+            closeBtn.replaceWith(closeBtn.cloneNode(true));
+            const newCloseBtn = document.getElementById('dataCardClose');
+            newCloseBtn.addEventListener('click', () => this.hideDataCard());
+        }
         
         // External links - replace card with iframe
         const externalLinks = card.querySelectorAll('.external-link');
@@ -221,10 +236,9 @@ export class DataCard {
     hideDataCard() {
         if (this.currentCard) {
             this.currentCard.classList.remove('show');
-            setTimeout(() => {
-                this.currentCard.remove();
-                this.currentCard = null;
-            }, 300);
+            // Don't remove the card from DOM since it's part of the HTML structure
+            // Just clear the reference
+            this.currentCard = null;
             
             // Clear stored content
             this.originalContent = null;

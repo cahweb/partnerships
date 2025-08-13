@@ -30,6 +30,12 @@ export class PartnershipGraph {
         this.trackNodes = [];
         this.trackLinks = [];
         
+        // Zoom functionality
+        this.zoomLevel = 1.0;
+        this.minZoom = 0.5;
+        this.maxZoom = 2.5;
+        this.zoomStep = 0.2;
+        
         // Cache for performance
         this.layoutCache = new Map();
         this.lastVizFrame = 0;
@@ -66,6 +72,79 @@ export class PartnershipGraph {
         this.canvas.addEventListener('mouseleave', () => {
             this.hoveredNode = null;
         });
+        
+        // Setup zoom button event listeners
+        this.setupZoomControls();
+    }
+    
+    setupZoomControls() {
+        const zoomInBtn = document.getElementById('zoomIn');
+        const zoomOutBtn = document.getElementById('zoomOut');
+        
+        if (zoomInBtn) {
+            zoomInBtn.addEventListener('click', () => this.zoomIn());
+        }
+        
+        if (zoomOutBtn) {
+            zoomOutBtn.addEventListener('click', () => this.zoomOut());
+        }
+    }
+    
+    zoomIn() {
+        if (this.zoomLevel < this.maxZoom) {
+            this.zoomLevel = Math.min(this.maxZoom, this.zoomLevel + this.zoomStep);
+            this.applyZoom();
+        }
+    }
+    
+    zoomOut() {
+        if (this.zoomLevel > this.minZoom) {
+            this.zoomLevel = Math.max(this.minZoom, this.zoomLevel - this.zoomStep);
+            this.applyZoom();
+        }
+    }
+    
+    applyZoom() {
+        // Update node radii
+        this.vizNodes.forEach(node => {
+            if (node.originalRadius === undefined) {
+                // Store original radius on first zoom
+                node.originalRadius = node.radius;
+            }
+            node.radius = node.originalRadius * this.zoomLevel;
+            // Mark that zoom has been applied to this node
+            node.zoomApplied = true;
+        });
+        
+        // Update simulation forces to account for new node sizes
+        if (this.simulation) {
+            // Update collision force with new radii
+            this.simulation.force('collide', d3.forceCollide()
+                .radius(d => (d.radius + 60) * this.zoomLevel)
+                .strength(0.9));
+            
+            // Update radial force distances
+            const radialForce = d3.forceRadial()
+                .radius(d => {
+                    const baseMaxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.45;
+                    const maxRadius = baseMaxRadius * this.zoomLevel;
+                    switch(d.type) {
+                        case 'central': return 0;
+                        case 'degree': return maxRadius * 0.50;
+                        case 'internal': return maxRadius * 0.70;
+                        case 'external': return maxRadius * 0.90;
+                        default: return maxRadius * 0.75;
+                    }
+                })
+                .x(this.canvas.width / 2)
+                .y(this.canvas.height / 2)
+                .strength(0.8);
+            
+            this.simulation.force('radial', radialForce);
+            
+            // Restart simulation with gentle alpha
+            this.simulation.alpha(0.3).restart();
+        }
     }
     
     createVisualization(departmentId) {
@@ -78,6 +157,9 @@ export class PartnershipGraph {
         
         this.currentDepartment = dept;
         this.currentDepartmentId = departmentId;
+        
+        // Reset zoom level for new visualization
+        this.zoomLevel = 1.0;
         
         // Reset debug frame counter
         this.debugFrameCount = 0;
@@ -117,7 +199,8 @@ export class PartnershipGraph {
             type: 'central',
             fx: this.canvas.width / 2, // Fixed position
             fy: this.canvas.height / 2,
-            radius: 30  // Increased from 20
+            radius: 30,  // Increased from 20
+            originalRadius: 30  // Store original radius for zoom
         };
         this.vizNodes.push(centralNode);
         nodeMap.set('central', centralNode);
@@ -154,7 +237,8 @@ export class PartnershipGraph {
                 name: baseName,
                 type: 'degree',
                 tracks: tracks,
-                radius: 20  // Increased from 15
+                radius: 20,  // Increased from 15
+                originalRadius: 20  // Store original radius for zoom
             };
             this.vizNodes.push(degreeNode);
             nodeMap.set(degreeNode.id, degreeNode);
@@ -173,7 +257,8 @@ export class PartnershipGraph {
                 id: `internal-${nodeId++}`,
                 name: partner,
                 type: 'internal',
-                radius: 18  // Increased from 12
+                radius: 18,  // Increased from 12
+                originalRadius: 18  // Store original radius for zoom
             };
             this.vizNodes.push(partnerNode);
             nodeMap.set(partnerNode.id, partnerNode);
@@ -192,7 +277,8 @@ export class PartnershipGraph {
                 id: `external-${nodeId++}`,
                 name: partner,
                 type: 'external',
-                radius: 16  // Increased from 12
+                radius: 16,  // Increased from 12
+                originalRadius: 16  // Store original radius for zoom
             };
             this.vizNodes.push(partnerNode);
             nodeMap.set(partnerNode.id, partnerNode);
@@ -512,8 +598,8 @@ export class PartnershipGraph {
         
         this.ctx.save();
         this.ctx.strokeStyle = colors[type] || colors.degree;
-        this.ctx.lineWidth = config.baseWidth + pulse;
-        this.ctx.shadowBlur = config.baseGlow + pulse;
+        this.ctx.lineWidth = (config.baseWidth + pulse) * this.zoomLevel;
+        this.ctx.shadowBlur = (config.baseGlow + pulse) * this.zoomLevel;
         this.ctx.shadowColor = colors[type] || colors.degree;
         this.ctx.globalAlpha = 0.8 * opacity;
         
@@ -557,8 +643,8 @@ export class PartnershipGraph {
         this.ctx.globalAlpha = opacity;
         this.ctx.fillStyle = colors[node.type] || '#ffffff';
         this.ctx.strokeStyle = '#ffffff';
-        this.ctx.lineWidth = node.type === 'track' ? 1.5 : 2;
-        this.ctx.shadowBlur = shadowBlur * opacity;
+        this.ctx.lineWidth = (node.type === 'track' ? 1.5 : 2) * this.zoomLevel;
+        this.ctx.shadowBlur = shadowBlur * opacity * this.zoomLevel;
         this.ctx.shadowColor = colors[node.type] || '#ffffff';
         
         this.ctx.beginPath();
@@ -595,27 +681,30 @@ export class PartnershipGraph {
             fontSize = node.type === 'central' ? 28 : 18;  // Further adjusted for complex departments
         }
         
+        // Apply zoom scaling to font size
+        fontSize *= this.zoomLevel;
+        
         this.ctx.save();
         this.ctx.globalAlpha = opacity;
         this.ctx.font = `bold ${fontSize}px Orbitron`;
         this.ctx.fillStyle = '#ffffff';
-        this.ctx.shadowBlur = 3 * opacity;
+        this.ctx.shadowBlur = 3 * opacity * this.zoomLevel;
         this.ctx.shadowColor = '#000000';
-        this.ctx.shadowOffsetX = 1;
-        this.ctx.shadowOffsetY = 1;
+        this.ctx.shadowOffsetX = 1 * this.zoomLevel;
+        this.ctx.shadowOffsetY = 1 * this.zoomLevel;
         
         // Get wrapped text lines
-        const maxWidth = this.getMaxWidthForNode(node, isComplexDepartment);
+        const maxWidth = this.getMaxWidthForNode(node, isComplexDepartment) * this.zoomLevel;
         const lines = this.getWrappedLines(node.name, maxWidth);
-        const lineHeight = fontSize + 4;
+        const lineHeight = (fontSize + 4);
         
-        // Calculate position - add more spacing below node
+        // Calculate position - add more spacing below node (scaled with zoom)
         let textX = node.x;
-        let textY = node.y + node.radius + 25;  // Increased from 20
+        let textY = node.y + node.radius + (25 * this.zoomLevel);
         let textAlign = 'center';
         
         // Edge-aware positioning
-        const padding = 10;
+        const padding = 10 * this.zoomLevel;
         const totalHeight = lines.length * lineHeight;
         
         // Check bounds and legend
@@ -770,11 +859,15 @@ export class PartnershipGraph {
                 type: 'track',
                 parent: degreeNode,
                 radius: 10,
+                originalRadius: 10,  // Store original radius for zoom
                 x: degreeNode.x + Math.cos(angle) * trackRadius,
                 y: degreeNode.y + Math.sin(angle) * trackRadius,
                 vx: 0,
                 vy: 0
             };
+            
+            // Apply current zoom level to track node
+            trackNode.radius = trackNode.originalRadius * this.zoomLevel;
             
             this.trackNodes.push(trackNode);
             this.vizNodes.push(trackNode);
@@ -887,6 +980,13 @@ export class PartnershipGraph {
                     node.y = centerY + (Math.random() - 0.5) * 20;
                     node.vx = 0;
                     node.vy = 0;
+                    
+                    // Apply current zoom level if not already applied
+                    if (node.originalRadius && !node.zoomApplied) {
+                        node.radius = node.originalRadius * this.zoomLevel;
+                        node.zoomApplied = true;
+                    }
+                    
                     currentNodes.push(node);
                 }
             });
