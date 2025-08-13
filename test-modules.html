@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Department Data</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #000;
+            color: #0ff;
+            padding: 20px;
+        }
+        .department {
+            border: 1px solid #0ff;
+            margin: 10px;
+            padding: 10px;
+        }
+        button {
+            background: #000;
+            color: #0ff;
+            border: 1px solid #0ff;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0ff;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Department Data Loading</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        async function testData() {
+            const output = document.getElementById('output');
+            
+            try {
+                const response = await fetch('new_data.json');
+                const data = await response.json();
+                
+                output.innerHTML = '<h2>Data loaded successfully!</h2>';
+                output.innerHTML += `<p>Number of departments: ${data.departments.length}</p>`;
+                
+                // Create department map
+                const departmentMap = {};
+                data.departments.forEach(dept => {
+                    departmentMap[dept.id] = dept;
+                });
+                
+                // Test each department
+                const testIds = [
+                    'school-of-performing-arts',
+                    'english',
+                    'history'
+                ];
+                
+                testIds.forEach(id => {
+                    const dept = departmentMap[id];
+                    if (dept) {
+                        const div = document.createElement('div');
+                        div.className = 'department';
+                        div.innerHTML = `
+                            <h3>${dept.name} (${id})</h3>
+                            <p>Degrees: ${dept.degrees ? dept.degrees.length : 0}</p>
+                            <p>Internal Partners: ${dept.internalPartners ? dept.internalPartners.length : 0}</p>
+                            <p>External Partners: ${dept.externalPartners ? dept.externalPartners.length : 0}</p>
+                            <p>Highlights: ${dept.highlights ? dept.highlights.length : 0}</p>
+                        `;
+                        output.appendChild(div);
+                    } else {
+                        output.innerHTML += `<p style="color: red;">Department ${id} not found!</p>`;
+                    }
+                });
+                
+            } catch (error) {
+                output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+        
+        testData();
+    </script>
+</body>
+</html>

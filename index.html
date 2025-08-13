@@ -39,10 +39,6 @@
         <!-- Visualization Legend -->
         <div id="vizLegend" class="viz-legend">
             <h4>Explore</h4>
-            <div class="legend-item" data-filter="central">
-                <div class="legend-color central"></div>
-                <span>Department Center</span>
-            </div>
             <div class="legend-item" data-filter="degree">
                 <div class="legend-color degree"></div>
                 <span>Degree Programs</span>
@@ -55,10 +51,6 @@
                 <div class="legend-color external"></div>
                 <span>External Partners</span>
             </div>
-            <div class="legend-item debug-toggle" id="debugToggle">
-                <div class="legend-color" style="background: rgba(255,0,0,0.3); border: 1px dashed #ff0000;"></div>
-                <span>Debug Bounds</span>
-            </div>
         </div>
     </div>
     
@@ -67,17 +59,31 @@
         <div id="popupWindow" class="popup-window">
             <div class="popup-header">
                 <h3 id="popupTitle" class="popup-title"></h3>
-                <button id="popupClose" class="popup-close">×</button>
             </div>
             <div class="popup-content">
-                <iframe id="popupIframe" class="popup-iframe" src="" title=""></iframe>
-                <div id="popupFallback" class="popup-fallback" style="display: none;">
-                    <p>Unable to load content. <a id="popupDirectLink" href="" target="_blank">Visit site directly →</a></p>
+                <p id="popupMessage" class="popup-message"></p>
+                <div class="popup-buttons">
+                    <button id="confirmButton" class="popup-button confirm">Continue</button>
+                    <button id="cancelButton" class="popup-button cancel">Cancel</button>
                 </div>
             </div>
         </div>
     </div>
     
-    <script src="script.js"></script>
+    <!-- Node container for department nodes -->
+    <div class="node-container"></div>
+    
+    <!-- Load D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <!-- Load modules -->
+    <script type="module">
+        import { AppCoordinator } from './modules/AppCoordinator.js';
+        
+        // Initialize the application when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app = new AppCoordinator();
+        });
+    </script>
 </body>
 </html>

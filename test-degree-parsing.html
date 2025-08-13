@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Degree Parsing</title>
+    <style>
+        body { font-family: monospace; background: #000; color: #0ff; padding: 20px; }
+        .degree { border: 1px solid #0ff; margin: 10px; padding: 10px; }
+        .track { margin-left: 20px; color: #80c0ff; }
+    </style>
+</head>
+<body>
+    <h1>Test Degree Track Parsing</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        async function testParsing() {
+            const output = document.getElementById('output');
+            
+            try {
+                const response = await fetch('new_data.json');
+                const data = await response.json();
+                
+                // Test English department
+                const english = data.departments.find(d => d.id === 'english');
+                if (english) {
+                    output.innerHTML += '<h2>English Department Degrees:</h2>';
+                    
+                    // Group degrees by base name
+                    const degreeMap = new Map();
+                    
+                    english.degrees.forEach(degree => {
+                        let baseName = degree;
+                        let trackName = null;
+                        
+                        if (degree.includes(':')) {
+                            const parts = degree.split(':');
+                            baseName = parts[0].trim();
+                            trackName = parts[1].trim().replace(' Track', '').trim();
+                        }
+                        
+                        if (!degreeMap.has(baseName)) {
+                            degreeMap.set(baseName, []);
+                        }
+                        
+                        if (trackName) {
+                            degreeMap.get(baseName).push(trackName);
+                        }
+                    });
+                    
+                    // Display grouped degrees
+                    degreeMap.forEach((tracks, baseName) => {
+                        const div = document.createElement('div');
+                        div.className = 'degree';
+                        let html = `<strong>${baseName}</strong>`;
+                        if (tracks.length > 0) {
+                            html += '<div class="track">Tracks:</div>';
+                            tracks.forEach(track => {
+                                html += `<div class="track">• ${track}</div>`;
+                            });
+                        }
+                        div.innerHTML = html;
+                        output.appendChild(div);
+                    });
+                }
+                
+                // Test Theatre department (many tracks)
+                const theatre = data.departments.find(d => d.id === 'school-of-performing-arts');
+                if (theatre) {
+                    output.innerHTML += '<h2>Theatre Department (sample):</h2>';
+                    
+                    // Show just Theatre BFA tracks
+                    const theatreBFA = theatre.degrees.filter(d => d.startsWith('Theatre BFA'));
+                    const div = document.createElement('div');
+                    div.className = 'degree';
+                    div.innerHTML = '<strong>Theatre BFA</strong><div class="track">Original entries:</div>';
+                    theatreBFA.forEach(degree => {
+                        div.innerHTML += `<div class="track">• ${degree}</div>`;
+                    });
+                    output.appendChild(div);
+                }
+                
+            } catch (error) {
+                output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+        
+        testParsing();
+    </script>
+</body>
+</html>
