@@ -232,14 +232,14 @@ export class PartnershipGraph {
         // Create custom radial force based on node type - scale with viewport
         const radialForce = d3.forceRadial()
             .radius(d => {
-                // Use larger percentage of viewport for better scaling
-                const maxRadius = Math.min(width, height) * 0.42;
+                // Use larger percentage of viewport for better scaling and spacing
+                const maxRadius = Math.min(width, height) * 0.45;  // Increased from 0.42
                 switch(d.type) {
                     case 'central': return 0;
-                    case 'degree': return maxRadius * 0.45;
-                    case 'internal': return maxRadius * 0.65;
-                    case 'external': return maxRadius * 0.85;
-                    default: return maxRadius * 0.7;
+                    case 'degree': return maxRadius * 0.50;   // Increased spacing
+                    case 'internal': return maxRadius * 0.70;  // Increased spacing
+                    case 'external': return maxRadius * 0.90;  // Increased spacing
+                    default: return maxRadius * 0.75;
                 }
             })
             .x(centerX)
@@ -254,11 +254,11 @@ export class PartnershipGraph {
         this.simulation = d3.forceSimulation(initialNodes)
             .force('radial', radialForce)
             .force('charge', d3.forceManyBody()
-                .strength(d => d.type === 'central' ? -200 : -100)
-                .distanceMax(200))
+                .strength(d => d.type === 'central' ? -300 : -150)  // Stronger repulsion
+                .distanceMax(250))  // Increased range
             .force('collide', d3.forceCollide()
-                .radius(d => d.radius + 40)  // Increased spacing for larger nodes
-                .strength(0.8))
+                .radius(d => d.radius + 60)  // Further increased spacing to prevent label overlap
+                .strength(0.9))  // Stronger collision avoidance
             .force('link', d3.forceLink(initialLinks)
                 .id(d => d.id)
                 .distance(100)
@@ -576,14 +576,23 @@ export class PartnershipGraph {
             (dept.internalPartners?.length || 0) + 
             (dept.externalPartners?.length || 0) > 20;
         
-        // Adaptive font sizing - much larger for center, scaled up for all
+        // Adaptive font sizing - adjust based on node count to prevent overlap
+        const totalNodes = this.vizNodes.length;
         let fontSize = 22;  // Base font size
+        
+        // Scale down fonts if there are many nodes
+        if (totalNodes > 30) {
+            fontSize = 18;  // Reduce for very crowded graphs
+        } else if (totalNodes > 20) {
+            fontSize = 20;  // Slightly reduce for crowded graphs
+        }
+        
         if (node.type === 'central') {
-            fontSize = 32;  // Central node size
+            fontSize = totalNodes > 30 ? 28 : 32;  // Central node size
         } else if (node.type === 'track') {
-            fontSize = 18;  // Track node size
+            fontSize = 16;  // Smaller track node size
         } else if (isComplexDepartment) {
-            fontSize = node.type === 'central' ? 30 : 20;  // Adjusted for complex departments
+            fontSize = node.type === 'central' ? 28 : 18;  // Further adjusted for complex departments
         }
         
         this.ctx.save();
@@ -600,9 +609,9 @@ export class PartnershipGraph {
         const lines = this.getWrappedLines(node.name, maxWidth);
         const lineHeight = fontSize + 4;
         
-        // Calculate position
+        // Calculate position - add more spacing below node
         let textX = node.x;
-        let textY = node.y + node.radius + 20;
+        let textY = node.y + node.radius + 25;  // Increased from 20
         let textAlign = 'center';
         
         // Edge-aware positioning
@@ -905,13 +914,13 @@ export class PartnershipGraph {
             // Add temporary radial force to push nodes outward - match main visualization scaling
             const radialForce = d3.forceRadial()
                 .radius(d => {
-                    const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.42;
+                    const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.45;  // Match main simulation
                     switch(d.type) {
                         case 'central': return 0;
-                        case 'degree': return maxRadius * 0.45;
-                        case 'internal': return maxRadius * 0.65;
-                        case 'external': return maxRadius * 0.85;
-                        default: return maxRadius * 0.7;
+                        case 'degree': return maxRadius * 0.50;
+                        case 'internal': return maxRadius * 0.70;
+                        case 'external': return maxRadius * 0.90;
+                        default: return maxRadius * 0.75;
                     }
                 })
                 .x(centerX)
