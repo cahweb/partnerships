@@ -297,11 +297,13 @@ body, html {
         0 0 50px rgba(0, 255, 255, 0.4),
         inset 0 0 30px rgba(0, 255, 255, 0.1);
     padding: 35px;
+    pointer-events: none; /* Prevent interaction when hidden */
 }
 
 .data-card.show {
     transform: translate(-50%, -50%) scale(1);
     opacity: 1;
+    pointer-events: auto; /* Enable interaction when visible */
 }
 
 .data-card-header {
@@ -647,10 +649,12 @@ body, html {
     background: rgba(0, 0, 0, 0.8);
     z-index: 400;
     transition: right 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    pointer-events: none; /* Prevent interaction when hidden */
 }
 
 .viz-area.show {
     right: 0;
+    pointer-events: auto; /* Enable interaction when visible */
 }
 
 #nodeVizCanvas {
@@ -677,6 +681,9 @@ body, html {
     box-shadow: 
         0 0 15px rgba(0, 255, 255, 0.3),
         inset 0 0 15px rgba(0, 255, 255, 0.1);
+    /* Fix hover alignment by ensuring box-sizing */
+    box-sizing: border-box;
+    line-height: 1;
 }
 
 .back-button:hover {
@@ -1375,6 +1382,7 @@ body, html {
         padding: 12px 20px;
         top: 20px;
         right: 20px;
+        line-height: 1.2;
     }
     
     .card-title {
@@ -1516,6 +1524,7 @@ body, html {
         padding: 8px 15px;
         top: 15px;
         right: 15px;
+        line-height: 1.2;
     }
     
     .card-title {
@@ -1653,10 +1662,11 @@ body, html {
     }
     
     .back-button {
-        font-size: 0.6rem; /* Extremely aggressive reduction */
-        padding: 5px 10px;
-        top: 8px;
-        right: 8px;
+        font-size: 0.7rem; /* Adjusted from 0.6rem for better readability */
+        padding: 6px 12px;
+        top: 10px;
+        right: 10px;
+        line-height: 1.2;
     }
     
     .card-title {
@@ -1775,12 +1785,14 @@ body, html {
     align-items: center;
     opacity: 0;
     visibility: hidden;
+    pointer-events: none; /* Ensure overlay doesn't block interactions when hidden */
     transition: all 0.3s ease;
 }
 
 .popup-overlay.show {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto; /* Enable interactions only when visible */
 }
 
 .popup-window {

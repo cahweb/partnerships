@@ -304,6 +304,8 @@ class TronCircuitboard {
     setupCanvas() {
         this.resizeCanvas();
         
+        // RESIZE EVENT DISABLED - Commenting out to debug alignment issues
+        /*
         let resizeTimeout;
         window.addEventListener('resize', () => {
             // Debounce resize events to avoid excessive redraws
@@ -340,6 +342,7 @@ class TronCircuitboard {
                 }
             }, 150);
         });
+        */
     }
     
     setupLegendFilters() {
