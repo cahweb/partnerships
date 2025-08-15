@@ -104,7 +104,11 @@
         "Orlando Shakes",
         "UCF Opera Board",
         "Theatre Professional Advisory Board",
-        "OUC"
+  "OUC",
+  "Central Florida Community Arts",
+  "Timucua Arts Foundation",
+  "Universal Orlando",
+  "Mahidol University, Bangkok, Thailand"
       ],
       "highlights": [
         {
@@ -244,7 +248,14 @@
       "internalPartners": [
         "Study abroad opportunities with UCF Abroad"
       ],
-      "externalPartners": [],
+      "externalPartners": [
+        "UCF Coastal",
+        "University of Surrey (UK)",
+        "University of Canberra (Australia)",
+        "Page 15",
+        "United Arts",
+        "Lockheed Martin"
+      ],
       "highlights": [
         {
           "title": "English Professor's Short Stories Adapted to Film",
@@ -265,6 +276,10 @@
         {
           "title": "English Graduate Symposium",
           "url": "https://cah.ucf.edu/english/symposium/"
+        },
+        {
+          "title": "ELLE the Endless Learner",
+          "url": "https://chdr.cs.ucf.edu/elle/"
         }
       ],
       "techCourses": [
@@ -303,7 +318,6 @@
         "National Historical Publications and Records Commission",
         "National Archives",
         "U.S. National Science Foundation",
-        "Johns Hopkins University",
         "Kurd Qaburstan Project"
       ],
       "highlights": [
@@ -330,6 +344,14 @@
         {
           "title": "PRINT",
           "url": "https://chdr.cah.ucf.edu/print/index.html"
+        },
+        {
+          "title": "ChronoPoints MemoryScan – Cocoa Beach A1A – ChronoPoints",
+          "url": "https://chronopoints.eecs.ucf.edu/cocoa_beach_a1a/" 
+        },
+        {
+          "title": "Preserve Eatonville (Preserve Eatonville Community (P.E.C.) / Zora Neale Hurston Festival - Public History Central)",
+          "url": "https://cah.ucf.edu/publichistory/initiatives/pec/"
         }
       ],
       "techCourses": [
@@ -448,17 +470,35 @@
         "English MA: Rhetoric and Composition"
       ],
       "internalPartners": [
-        "Writing Across the Curriculum",
-        "University Writing Center",
-        "Knights Write Showcase",
-        "Imprint Magazine",
-        "Stylus Journal",
-        "Convergence Rhetoric: Journal of Undergraduate Research",
-        "Center for Higher Education Innovation"
+  "University Writing Center",
+  "Knights Write Showcase",
+  "Imprint Magazine",
+  "Stylus Journal",
+  "Convergence Rhetoric: Journal of Undergraduate Research",
+  "Center for Higher Education Innovation",
+  "Continuing Education",
+  "Florida Prison Education Project",
+  "LIFE at UCF",
+  "UCF Center for Ethics",
+  "Learning Sciences Cluster",
+  "Global Achievement Academy",
+  "College of Nursing",
+  "College of Community Innovation and Education",
+  "Rosen College of Hospitality Management"
       ],
       "externalPartners": [
-        "Ah-Tah-Thi-Ki Museum",
-        "National Institute for Student Success"
+  "Ah-Tah-Thi-Ki Museum",
+  "National Institute for Student Success",
+  "College Board",
+  "K-12 School Districts around the US",
+  "University of Florida / Florida Department of Health",
+  "Page 15 Literacy Program",
+  "Legacy Pointe",
+  "StoryCorps",
+  "National Council of Teachers of English",
+  "Global Society of Online Literacy Educators",
+  "Central Florida Public Media",
+  "West Virginia University (Care Lab)"
       ],
       "highlights": [
         {
@@ -480,6 +520,10 @@
         {
           "title": "Knights Write!",
           "url": "https://cah.ucf.edu/writingrhetoric/knights-write/"
+        },
+        {
+          "title": "DWR Podcast",
+          "url": "https://ucfdwr.podbean.com/"
         }
       ],
       "techCourses": [
@@ -579,7 +623,7 @@
       "image": "gender.jpg",
       "spotlight": "https://cah.ucf.edu/spotlight/women-gender-2025/",
       "degrees": [
-        "Gender Studies Certificate"
+        "Women's and Gender Studies Minor"
       ],
       "internalPartners": [
         "Science Leadership and Mentoring program partners with STEM colleges at UCF",
