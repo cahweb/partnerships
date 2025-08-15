@@ -17,6 +17,7 @@ class TronCircuitboard {
         this.nodes = [];
         this.departmentData = null;
         this.isDetailView = false;
+        this.lineGenerationInterval = null;
         this.currentNode = null;
         this.vizNodes = [];
         this.vizLinks = [];
@@ -36,17 +37,20 @@ class TronCircuitboard {
         this.lastVizFrame = 0; // For frame rate limiting
         this.vizAnimationId = null; // Track animation frame ID
         
+        // Department order with requested swaps:
+        // - Swapped English with Women's and Gender Studies
+        // - Swapped History with School of Visual Arts and Design
         this.departmentNames = [
             'School of Performing Arts',
-            'School of Visual Arts and Design',
-            'English',
-            'History',
+            'History', // swapped with School of Visual Arts and Design
+            'Women\'s and Gender Studies', // swapped with English
+            'School of Visual Arts and Design', // swapped with History
             'Modern Languages and Literatures',
             'Philosophy',
             'Writing and Rhetoric',
             'Texts and Technology',
             'Themed Experience',
-            'Women\'s and Gender Studies'
+            'English' // swapped with Women's and Gender Studies
         ];
         
         // Load department data
@@ -308,6 +312,18 @@ class TronCircuitboard {
                 this.resizeCanvas();
                 this.generateGrid(); // Regenerate grid for new dimensions
                 
+                // Clear and regenerate circuit lines for new canvas dimensions
+                if (!this.isDetailView) {
+                    this.lines = [];
+                    this.intersections = [];
+                    this.pulses = [];
+                    
+                    // Wait additional 500ms after resize to ensure user is done resizing
+                    setTimeout(() => {
+                        this.restartLineAnimation();
+                    }, 500);
+                }
+                
                 // If we're in detail view, recreate the visualization
                 if (this.isDetailView && this.currentNode) {
                     const departmentId = this.getDepartmentId(this.currentNode.textContent);
@@ -378,17 +394,33 @@ class TronCircuitboard {
         
         // Wait for text to be rendered, then generate lines
         setTimeout(() => {
-            let edgeCounter = 0; // To ensure even distribution
-            const interval = setInterval(() => {
-                if (this.lines.length >= this.maxLines) {
-                    clearInterval(interval);
-                    return;
-                }
-                
-                this.createRandomLine(edgeCounter % 4); // Pass the edge to use
-                edgeCounter++;
-            }, 200);
+            this.startLineGeneration();
         }, 2000); // Wait 2 seconds for text animation to complete
+    }
+    
+    restartLineAnimation() {
+        // Start line generation immediately without showing text again
+        this.startLineGeneration();
+    }
+    
+    startLineGeneration() {
+        // Clear any existing line generation interval
+        if (this.lineGenerationInterval) {
+            clearInterval(this.lineGenerationInterval);
+            this.lineGenerationInterval = null;
+        }
+        
+        let edgeCounter = 0; // To ensure even distribution
+        this.lineGenerationInterval = setInterval(() => {
+            if (this.lines.length >= this.maxLines) {
+                clearInterval(this.lineGenerationInterval);
+                this.lineGenerationInterval = null;
+                return;
+            }
+            
+            this.createRandomLine(edgeCounter % 4); // Pass the edge to use
+            edgeCounter++;
+        }, 200);
     }
     
     getTextBoundaries(addPadding = false) {
@@ -817,15 +849,143 @@ class TronCircuitboard {
         // textContainer.style.transform = 'scale(0.8)';
         // textContainer.style.transition = 'all 1s ease-out';
         
-        // Generate nodes for each department
+        // Wide screen optimized even-spacing prelayout
+        const isWideScreen = window.innerWidth >= 1400 && window.innerHeight >= 700; // heuristic
+        this.precomputedNodePositions = null;
+
+        if (isWideScreen) {
+            try {
+                const textContainer = document.getElementById('textContainer');
+                const textRect = textContainer.getBoundingClientRect();
+                const centerX = this.canvas.width / 2;
+                const centerY = this.canvas.height / 2;
+                const textArea = {
+                    centerX: textRect.left + textRect.width / 2,
+                    centerY: textRect.top + textRect.height / 2,
+                    width: textRect.width,
+                    height: textRect.height
+                };
+
+                // Measure all node widths/heights off-DOM
+                const tempFragment = document.createDocumentFragment();
+                const metrics = [];
+                this.departmentNames.forEach(name => {
+                    const el = document.createElement('div');
+                    el.className = 'neon-node';
+                    el.style.position = 'absolute';
+                    el.style.opacity = '0';
+                    el.textContent = name;
+                    tempFragment.appendChild(el);
+                    metrics.push(el);
+                });
+                document.body.appendChild(tempFragment);
+                const nodeMetrics = metrics.map(el => { const r = el.getBoundingClientRect(); return { name: el.textContent, width: r.width, height: r.height }; });
+                metrics.forEach(el => el.remove());
+
+                // Parameters
+                const exclusionPadding = 120;
+                const minSafeDistance = Math.max((textArea.width/2)+exclusionPadding, (textArea.height/2)+exclusionPadding);
+                const maxRadius = Math.min(this.canvas.width, this.canvas.height) / 2 - 100;
+                const baseRadius = minSafeDistance + 90;
+                const radialGap = 150; // gap between rings
+                const horizBuffer = 55; // extra spacing between node boxes
+
+                // Ring packing: fill each ring until circumference capacity reached (at 85% utilization)
+                const rings = [];
+                let currentRadius = baseRadius;
+                let remaining = [...nodeMetrics];
+                while (remaining.length && currentRadius <= maxRadius + 20) {
+                    const circumference = 2 * Math.PI * currentRadius;
+                    const capacity = circumference * 0.85; // leave 15% slack
+                    let used = 0;
+                    const ringNodes = [];
+                    // Greedy add while fits
+                    for (let i = 0; i < remaining.length; i++) {
+                        const m = remaining[i];
+                        const need = m.width + horizBuffer;
+                        if (used + need <= capacity || ringNodes.length === 0) {
+                            ringNodes.push(m);
+                            used += need;
+                            remaining.splice(i,1); i--; // remove
+                        }
+                    }
+                    rings.push({ radius: currentRadius, nodes: ringNodes, used });
+                    currentRadius += radialGap;
+                }
+                // If still remaining (too many nodes, small screen), append to last ring
+                if (remaining.length) {
+                    if (rings.length === 0) rings.push({ radius: currentRadius, nodes: [], used:0 });
+                    rings[rings.length-1].nodes.push(...remaining);
+                }
+
+                // Angle allocation per ring using required angular span = (width + buffer)/radius
+                this.precomputedNodePositions = {};
+                rings.forEach((ring, ringIndex) => {
+                    let r = ring.radius;
+                    // Ensure total required angle fits into 2π; if not, scale radius up (capped)
+                    const requiredAngle = ring.nodes.reduce((sum,m)=> sum + (m.width + horizBuffer)/r, 0);
+                    if (requiredAngle > 2 * Math.PI * 0.92) { // too crowded
+                        const scale = requiredAngle / (2 * Math.PI * 0.85);
+                        r = Math.min(maxRadius, r * scale);
+                    }
+                    const totalAngle = ring.nodes.reduce((sum,m)=> sum + (m.width + horizBuffer)/r, 0);
+                    // Remaining free angle for gaps
+                    const freeAngle = Math.max(0, 2*Math.PI - totalAngle);
+                    const gapPerNode = freeAngle / ring.nodes.length;
+                    let theta = -Math.PI/2 + (ringIndex % 2 ? gapPerNode/2 : 0); // start at top, alternate offset
+                    ring.nodes.forEach(m => {
+                        const span = (m.width + horizBuffer)/r;
+                        const angleMid = theta + span/2;
+                        const x = textArea.centerX + Math.cos(angleMid)*r - m.width/2;
+                        const y = textArea.centerY + Math.sin(angleMid)*r - m.height/2;
+                        this.precomputedNodePositions[m.name] = { x: Math.round(x), y: Math.round(y), width: m.width, height: m.height };
+                        theta += span + gapPerNode;
+                    });
+                });
+
+                // Small post-pass radial nudge if any overlaps remain (rare)
+                const entries = Object.values(this.precomputedNodePositions);
+                let safety = 0;
+                while (safety < 40) {
+                    let adjusted = false;
+                    for (let i=0;i<entries.length;i++) {
+                        for (let j=i+1;j<entries.length;j++) {
+                            const a = entries[i], b = entries[j];
+                            if (!(a.x + a.width + 10 < b.x || b.x + b.width + 10 < a.x || a.y + a.height + 10 < b.y || b.y + b.height + 10 < a.y)) {
+                                // Overlap -> push the farther-from-center one outward slightly
+                                const aCx = a.x + a.width/2; const aCy = a.y + a.height/2;
+                                const bCx = b.x + b.width/2; const bCy = b.y + b.height/2;
+                                const dA = Math.hypot(aCx - textArea.centerX, aCy - textArea.centerY);
+                                const dB = Math.hypot(bCx - textArea.centerX, bCy - textArea.centerY);
+                                const target = dA > dB ? a : b;
+                                const tCx = target.x + target.width/2; const tCy = target.y + target.height/2;
+                                const ang = Math.atan2(tCy - textArea.centerY, tCx - textArea.centerX);
+                                const push = 18; // small nudge
+                                const newX = tCx + Math.cos(ang)*push - target.width/2;
+                                const newY = tCy + Math.sin(ang)*push - target.height/2;
+                                target.x = newX; target.y = newY;
+                                adjusted = true;
+                            }
+                        }
+                    }
+                    if (!adjusted) break;
+                    safety++;
+                }
+            } catch(e) {
+                console.warn('Wide screen prelayout failed, fallback to legacy layout', e);
+            }
+        }
+
+        // Generate nodes (using precomputed positions if available)
         this.departmentNames.forEach((name, index) => {
             setTimeout(() => {
-                this.createNode(name, index);
+                const preset = this.precomputedNodePositions ? this.precomputedNodePositions[name] : null;
+                this.createNode(name, index, preset);
             }, index * 200);
         });
     }
     
-    createNode(name, index) {
+    createNode(name, index, presetPosition = null) {
         const node = document.createElement('div');
         node.className = 'neon-node';
         node.textContent = name;
@@ -840,6 +1000,23 @@ class TronCircuitboard {
         const nodeRect = node.getBoundingClientRect();
         const nodeWidth = nodeRect.width;
         const nodeHeight = nodeRect.height;
+
+        // If we have a preset position (wide screen balanced layout) use it directly
+        if (presetPosition) {
+            const x = presetPosition.x;
+            const y = presetPosition.y;
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+            node.style.opacity = '0';
+            node.style.transform = 'scale(0) rotate(180deg)';
+            setTimeout(()=>{
+                node.style.opacity = '1';
+                node.style.transform = 'scale(1) rotate(0deg)';
+            },100);
+            this.nodes.push({ element: node, name, x, y, width: nodeWidth, height: nodeHeight });
+            this.addNodeInteractions(node);
+            return; // Skip legacy placement logic
+        }
         
         // Get text area bounds to avoid overlap
         const textContainer = document.getElementById('textContainer');
@@ -913,7 +1090,21 @@ class TronCircuitboard {
         // Calculate angle for this node with better distribution (precompute constants)
         const angleOffset = Math.PI / totalNodes; // Precompute offset
         const angle = (index / totalNodes) * 2 * Math.PI + angleOffset; // Offset to avoid straight axes
-        const radius = baseRadius + (Math.sin(index * 0.7) * radiusVariation); // Use sine for smoother variation
+        
+        // Use different radius calculation for desktop vs mobile to prevent clustering
+        let radius;
+        if (isSmallMobile || isMediumMobile || isMobile) {
+            // Mobile: Keep sine variation (works well with small radiusVariation)
+            radius = baseRadius + (Math.sin(index * 0.7) * radiusVariation);
+        } else {
+            // Desktop: Use systematic ring-based distribution instead of sine clustering
+            const ringsCount = Math.min(3, Math.ceil(totalNodes / 8)); // Max 3 rings, 8 nodes per ring
+            const ringIndex = index % ringsCount;
+            const ringRadius = baseRadius + (ringIndex * (radiusVariation / ringsCount));
+            // Use index-based variation for deterministic positioning
+            const variation = ((index * 7) % 20) - 10; // Deterministic variation -10 to +10
+            radius = ringRadius + variation;
+        }
         
         // Precompute trigonometric values
         const cosAngle = Math.cos(angle);
@@ -956,13 +1147,13 @@ class TronCircuitboard {
         }
         
         // Check for overlap with existing nodes and adjust if needed (responsive buffer)
-        let nodeBuffer = 50; // Default buffer
+        let nodeBuffer = 70; // Increased buffer to prevent outline collisions
         if (isSmallMobile) {
-            nodeBuffer = 15; // Much smaller buffer for small screens to fit more nodes
+            nodeBuffer = 25; // Increased from 15 for outline spacing
         } else if (isMediumMobile) {
-            nodeBuffer = 20; // Smaller buffer for medium mobile
+            nodeBuffer = 35; // Increased from 20 for outline spacing
         } else if (isMobile) {
-            nodeBuffer = 22; // Reduced buffer for mobile
+            nodeBuffer = 40; // Increased from 22 for outline spacing
         }
         
         let attempts = 0;
@@ -988,6 +1179,31 @@ class TronCircuitboard {
                 y = margin + (row * cellHeight) + (cellHeight - nodeHeight) / 2;
                 
                 // Skip if this overlaps with text
+                if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
+                    continue;
+                }
+            } else if (attempts > 8) {
+                // Use grid-based fallback for desktop too after fewer attempts for better distribution
+                const gridCols = Math.min(6, totalNodes); // 6 columns for desktop
+                const gridRows = Math.ceil(totalNodes / gridCols);
+                const gridIndex = index + (attempts - 8);
+                const col = gridIndex % gridCols;
+                const row = Math.floor(gridIndex / gridCols);
+                
+                // Create a ring-based grid that maintains circular distribution
+                const ringRadius = baseRadius + (row * 70); // Each row is a ring
+                const anglesInRing = gridCols;
+                const angleStep = (2 * Math.PI) / anglesInRing;
+                const ringAngle = col * angleStep + (row * 0.2); // Slight offset per ring
+                
+                x = textArea.centerX + Math.cos(ringAngle) * ringRadius - nodeWidth/2;
+                y = textArea.centerY + Math.sin(ringAngle) * ringRadius - nodeHeight/2;
+                
+                // Keep within bounds
+                x = Math.max(minX, Math.min(x, maxX));
+                y = Math.max(minY, Math.min(y, maxY));
+                
+                // Skip if overlaps with text
                 if (this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
                     continue;
                 }
@@ -1128,13 +1344,13 @@ class TronCircuitboard {
             margin = 18;
         }
         
-        let nodeBuffer = 50;
+        let nodeBuffer = 70; // Increased for outline spacing
         if (isSmallMobile) {
-            nodeBuffer = 15;
+            nodeBuffer = 25; // Increased from 15
         } else if (isMediumMobile) {
-            nodeBuffer = 20;
+            nodeBuffer = 35; // Increased from 20
         } else if (isMobile) {
-            nodeBuffer = 22;
+            nodeBuffer = 40; // Increased from 22
         }
         
         // Reposition each existing node
@@ -1146,7 +1362,21 @@ class TronCircuitboard {
             const totalNodes = this.nodes.length;
             const angle = (index / totalNodes) * 2 * Math.PI + (Math.PI / totalNodes);
             const radiusVariation = isSmallMobile ? 15 : (isMediumMobile ? 20 : (isMobile ? 25 : 60));
-            const radius = baseRadius + (Math.sin(index * 0.7) * radiusVariation);
+            
+            // Use same radius calculation logic as createNode
+            let radius;
+            if (isSmallMobile || isMediumMobile || isMobile) {
+                // Mobile: Keep sine variation (works well with small radiusVariation)
+                radius = baseRadius + (Math.sin(index * 0.7) * radiusVariation);
+            } else {
+                // Desktop: Use systematic ring-based distribution (deterministic for resize)
+                const ringsCount = Math.min(3, Math.ceil(totalNodes / 8));
+                const ringIndex = index % ringsCount;
+                const ringRadius = baseRadius + (ringIndex * (radiusVariation / ringsCount));
+                // Use index-based variation instead of random for consistency
+                const variation = ((index * 7) % 20) - 10; // Deterministic variation -10 to +10
+                radius = ringRadius + variation;
+            }
             
             let x = textArea.centerX + Math.cos(angle) * radius - nodeWidth/2;
             let y = textArea.centerY + Math.sin(angle) * radius - nodeHeight/2;
@@ -1193,6 +1423,27 @@ class TronCircuitboard {
                     
                     x = margin + (col * cellWidth) + (cellWidth - nodeWidth) / 2;
                     y = margin + (row * cellHeight) + (cellHeight - nodeHeight) / 2;
+                    
+                    if (!this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
+                        break;
+                    }
+                } else if (attempts > 6) {
+                    // Use ring-based grid fallback for desktop too after fewer attempts
+                    const gridCols = Math.min(6, totalNodes);
+                    const gridIndex = index + (attempts - 6);
+                    const col = gridIndex % gridCols;
+                    const row = Math.floor(gridIndex / gridCols);
+                    
+                    // Create ring-based grid for resize repositioning
+                    const ringRadius = baseRadius + (row * 70);
+                    const angleStep = (2 * Math.PI) / gridCols;
+                    const ringAngle = col * angleStep + (row * 0.2);
+                    
+                    x = textArea.centerX + Math.cos(ringAngle) * ringRadius - nodeWidth/2;
+                    y = textArea.centerY + Math.sin(ringAngle) * ringRadius - nodeHeight/2;
+                    
+                    x = Math.max(minX, Math.min(x, maxX));
+                    y = Math.max(minY, Math.min(y, maxY));
                     
                     if (!this.overlapsWithText(x, y, nodeWidth, nodeHeight, textExclusionArea)) {
                         break;
@@ -2056,7 +2307,7 @@ class TronCircuitboard {
                                 // For non-degree nodes, calculate based on text size
                                 const textWidthA = this.estimateTextWidth(nodeTemplate.name, nodeTemplate.type) || 100;
                                 const textWidthB = this.estimateTextWidth(existing.name, existing.type) || 100;
-                                requiredDistance = (textWidthA + textWidthB) / 2 + (isComplexDept ? 100 : 80);
+                                requiredDistance = (textWidthA + textWidthB) / 2 + (isComplexDept ? 140 : 120); // Increased for outline spacing
                             }
                             
                             if (distance < requiredDistance) {
@@ -2242,8 +2493,8 @@ class TronCircuitboard {
             y: centerY,
             type: 'central',
             radius: 25,
-            textWidth: 200,
-            textHeight: 30
+            textWidth: 140, // 70% reduced
+            textHeight: 21 // 70% reduced
         };
         
         // Enhanced overlap detection with text bounds
@@ -2252,7 +2503,7 @@ class TronCircuitboard {
             
             // Estimate text bounds more accurately
             const textWidthA = this.estimateTextWidth(nodeA.name, nodeA.type);
-            const textHeightA = 20; // Standard text height
+            const textHeightA = 14; // Standard text height (70% reduced)
             
             // Check text overlap with central node
             const centralOverlap = this.checkTextOverlap(
@@ -2267,7 +2518,7 @@ class TronCircuitboard {
             for (let j = i + 1; j < layout.length; j++) {
                 const nodeB = layout[j];
                 const textWidthB = this.estimateTextWidth(nodeB.name, nodeB.type);
-                const textHeightB = 20;
+                const textHeightB = 14; // 70% reduced
                 
                 // Check text overlap between nodes
                 const textOverlap = this.checkTextOverlap(
@@ -2324,17 +2575,17 @@ class TronCircuitboard {
     }
     
     estimateTextWidth(text, nodeType) {
-        // More accurate text width estimation
-        const baseFontSize = nodeType === 'central' ? 16 : 12;
+        // More accurate text width estimation - updated for 70% font reduction
+        const baseFontSize = nodeType === 'central' ? 11.2 : 8.4; // 70% of original sizes
         const charWidth = baseFontSize * 0.6; // Approximate character width
-        return Math.min(text.length * charWidth, 200); // Cap at 200px
+        return Math.min(text.length * charWidth, 140); // Cap reduced to 140px (70% of 200px)
     }
 
     getFontSize(nodeType, isComplexDept = false) {
         if (nodeType === 'central') {
-            return isComplexDept ? '20px' : '22px';
+            return isComplexDept ? '14px' : '15.4px'; // 70% of original sizes
         }
-        return isComplexDept ? '15px' : '17px';
+        return isComplexDept ? '10.5px' : '11.9px'; // 70% of original sizes
     }
     
     // Helper function to check if current department is complex
@@ -2368,7 +2619,7 @@ class TronCircuitboard {
         const boundsB = this.getTextBounds(nodeB, isComplexDept);
         
         // Add larger buffer around text to ensure readability - more for complex departments
-        const textBuffer = isComplexDept ? 60 : 50; // Increased buffer for complex departments
+        const textBuffer = isComplexDept ? 80 : 70; // Further increased for outline collision prevention
         
         const expandedBoundsA = {
             left: boundsA.left - textBuffer,
@@ -2491,7 +2742,7 @@ class TronCircuitboard {
             
             // Also check text bounds intersection with a lighter penalty
             const textBounds = this.getTextBounds(otherNode);
-            const textBuffer = 15; // Increased text buffer
+            const textBuffer = 25; // Further increased for outline spacing
             
             if (this.lineIntersectsRectangle(
                 centerX, centerY, currentNode.x, currentNode.y,
@@ -2704,14 +2955,14 @@ class TronCircuitboard {
     }
 
     estimateTextHeight(text, nodeType = 'degree', isComplexDept = false) {
-        // Central nodes use single line font - smaller for complex departments
+        // Central nodes use single line font - smaller for complex departments - updated for 70% reduction
         if (nodeType === 'central') {
-            return isComplexDept ? 20 : 22; // Smaller for complex departments
+            return isComplexDept ? 14 : 15.4; // 70% of original sizes
         }
         
         // Use the same wrapping logic as rendering to get accurate line count
         const lines = this.getWrappedLines(text, nodeType, isComplexDept);
-        const lineHeight = isComplexDept ? 13 : 15; // Smaller line height for complex departments
+        const lineHeight = isComplexDept ? 9.1 : 10.5; // 70% of original sizes
         return lines.length * lineHeight;
     }
 
@@ -2849,7 +3100,7 @@ class TronCircuitboard {
             x: node.x,
             y: node.y,
             textWidth: this.estimateTextWidth(node.name), // Dynamic text width estimation
-            textHeight: 50  // Increased text height estimate
+            textHeight: 35  // Increased text height estimate (70% reduced)
         }));
         
         tracks.forEach((track, trackIndex) => {
@@ -2885,8 +3136,8 @@ class TronCircuitboard {
                     const dy = Math.abs(testY - existing.y);
                     
                     // Much larger separation requirements for bigger fonts
-                    const requiredSeparationX = (existing.textWidth + trackTextWidth) / 2 + 120; // Much larger buffer
-                    const requiredSeparationY = 120; // Much larger vertical buffer
+                    const requiredSeparationX = (existing.textWidth + trackTextWidth) / 2 + 150; // Further increased for outline spacing
+                    const requiredSeparationY = 140; // Further increased vertical buffer for outlines
                     
                     if (dx < requiredSeparationX && dy < requiredSeparationY) {
                         hasCollision = true;
@@ -2941,7 +3192,7 @@ class TronCircuitboard {
                 x: bounded.x,
                 y: bounded.y,
                 textWidth: this.estimateTextWidth(track),
-                textHeight: 50
+                textHeight: 35 // 70% reduced
             });
             
             const trackId = track.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -3323,7 +3574,7 @@ class TronCircuitboard {
             
             // Draw track label with better positioning to avoid overlaps
             this.vizCtx.globalAlpha = 1;
-            this.vizCtx.font = 'normal 13px "Orbitron", monospace'; // Slightly smaller font
+            this.vizCtx.font = 'normal 9.1px "Orbitron", monospace'; // Slightly smaller font
             this.vizCtx.fillStyle = '#ffffff';  // White text for consistency
             this.vizCtx.strokeStyle = '#000000';
             this.vizCtx.lineWidth = 2;
